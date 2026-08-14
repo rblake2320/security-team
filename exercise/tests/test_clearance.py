@@ -20,6 +20,9 @@ EX = HERE.parent
 sys.path.insert(0, str(EX))
 
 import clearance as clr  # noqa: E402
+sys.path.insert(0, str(HERE / "fixtures"))
+from make_fixture_trust import ensure as _ensure_fixture_trust  # noqa: E402
+_ensure_fixture_trust()   # a fresh clone has no fixture keys; generate them
 import run_rehearsal  # noqa: E402
 
 FIX = HERE / "fixtures" / "trust"

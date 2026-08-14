@@ -13,6 +13,9 @@ sys.path.insert(0, str(ROOT))
 import base64 as _b64  # noqa: E402
 
 import clearance as clr  # noqa: E402
+sys.path.insert(0, str(ROOT / "tests" / "fixtures"))
+from make_fixture_trust import ensure as _ensure_fixture_trust  # noqa: E402
+_ensure_fixture_trust()   # a fresh clone has no fixture keys; generate them
 from cryptography.hazmat.primitives import serialization  # noqa: E402
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey  # noqa: E402
 from run_rehearsal import (  # noqa: E402

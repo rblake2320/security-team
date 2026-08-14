@@ -8,6 +8,10 @@
 # Guarded by 00-shared/tools/test_repo_hygiene.py (falsification test).
 # ---------------------------------------------------------------------------
 **/_fixture_private_keys.json
+# Fixture trust material is GENERATED, never committed: committed public records
+# with gitignored private keys left a fresh clone unable to run the rehearsal.
+# Regenerate: python exercise/tests/fixtures/make_fixture_trust.py
+exercise/tests/fixtures/trust/
 **/*.pem
 **/*.key
 **/authority.pem

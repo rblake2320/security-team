@@ -1,7 +1,0 @@
-{
-  "key_id": "fixture-white-2026",
-  "role": "White approval authority",
-  "environment": "TEST_ONLY",
-  "public_key": "J7HMiJOrfCMi7mbT+ezOTb8wig9VTsGb8l6chxeUIqw=",
-  "WARNING": "FIXTURE KEY. Can never satisfy a production gate. Formal mode refuses it."
-}

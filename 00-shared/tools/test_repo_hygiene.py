@@ -47,10 +47,15 @@ class RepoHygieneTests(unittest.TestCase):
     def test_fixture_private_keys_exist_but_are_ignored(self):
         """The fixture keys are needed on disk and must be excluded from git."""
         keys = PROGRAM / "exercise" / "tests" / "fixtures" / "trust" / "_fixture_private_keys.json"
-        self.assertTrue(keys.is_file(), "fixture keys are required for engineering rehearsal")
+        gen = PROGRAM / "exercise" / "tests" / "fixtures" / "make_fixture_trust.py"
+        self.assertTrue(gen.is_file(),
+                        "a fresh clone must be able to GENERATE fixture trust material; "
+                        "committed public keys with gitignored private keys are unusable")
         root = repo_root()
         if root is None:
             self.skipTest("not a git repository")
+        if not keys.is_file():
+            return   # fresh clone: absence is correct, the generator supplies them
         code, _ = git("check-ignore", "-q", str(keys), cwd=root)
         self.assertEqual(code, 0,
                          "fixture private keys are NOT gitignored; committing would place "

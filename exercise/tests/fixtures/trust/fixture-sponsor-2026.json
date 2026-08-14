@@ -1,7 +1,0 @@
-{
-  "key_id": "fixture-sponsor-2026",
-  "role": "Executive sponsor",
-  "environment": "TEST_ONLY",
-  "public_key": "J0FtDOOyidnymNBbInZgV/kCdzARB81eTesYnFgXEqc=",
-  "WARNING": "FIXTURE KEY. Can never satisfy a production gate. Formal mode refuses it."
-}

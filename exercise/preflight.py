@@ -237,6 +237,9 @@ def _issue_clearance(mode: str) -> Path:
         raise Refused("NO-PRODUCTION-ISSUER",
                       "no production clearance-issuer key is enrolled; formal mode cannot be cleared")
 
+    sys.path.insert(0, str(HERE / "tests" / "fixtures"))
+    from make_fixture_trust import ensure as ensure_fixture_trust
+    ensure_fixture_trust()      # fresh clone: generate TEST_ONLY material on demand
     fixture = HERE / "tests" / "fixtures" / "trust" / "_fixture_private_keys.json"
     if not fixture.exists():
         raise Refused("NO-ISSUER-KEY", "no clearance issuer key available")
