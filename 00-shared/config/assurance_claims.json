@@ -947,7 +947,7 @@
       "claim": "Content-addressed files hash identically on Linux and Windows checkouts, and the harness provisions itself from a clean clone.",
       "scope": {
         "artifact": ".gitattributes + make_fixture_trust.py",
-        "environment": "ubuntu-latest and windows-latest"
+        "environment": "ubuntu-latest, windows-latest, macos-latest"
       },
       "mechanism": {
         "construction": "`* text=auto eol=lf` plus `-text` (no translation) on files hashed or signed over raw bytes; fixture trust material and engineering scaffolding generated on demand rather than committed."
@@ -964,7 +964,7 @@
       ],
       "limitations": [
         "Guards the files listed in .gitattributes. A new content-addressed file added without an entry is not covered.",
-        "Only ubuntu-latest and windows-latest are exercised; macOS is untested."
+        "Exercised on ubuntu-latest, windows-latest and macos-latest. Other platforms untested."
       ],
       "regression_triggers": [
         "gitattributes_change",
