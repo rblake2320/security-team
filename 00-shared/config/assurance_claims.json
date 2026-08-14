@@ -843,7 +843,7 @@
     },
     {
       "claim_id": "PROGRAM-CI-REACHABLE-001",
-      "version": 1,
+      "version": 2,
       "claim": "The program's CI gates are executable: reachable by GitHub Actions when pushed, and runnable locally without any external service.",
       "scope": {
         "artifact": ".github/workflows/purple-team-integrity.yml + 00-shared/tools/run_ci.py",
@@ -858,12 +858,13 @@
       "evidence": [
         "00-shared/tools/test_repo_hygiene.py::test_program_workflows_are_reachable_by_ci",
         "00-shared/tools/test_repo_hygiene.py::test_root_workflow_actually_invokes_the_program_gates",
-        "local run 2026-08-14: 9/9 engineering gates PASS; --assurance FAILS closed (exit 1)"
+        "local run 2026-08-14: 9/9 engineering gates PASS; --assurance FAILS closed (exit 1)",
+        "GitHub Actions run 31817937014 SUCCESS on ubuntu-latest AND windows-latest (2026-08-14) - the workflow has now actually executed"
       ],
       "limitations": [
-        "The root workflow has NEVER EXECUTED - the program directory is untracked and nothing has been pushed.",
         "Local runner enforcement depends on a human invoking it; it is not a pre-commit hook.",
-        "The previously claimed CI enforcement (2026-08-14, earlier) was unevidenced: workflows sat at a nested path Actions never reads."
+        "The previously claimed CI enforcement (2026-08-14, earlier) was unevidenced: workflows sat at a nested path Actions never reads.",
+        "Executed and green as of run 31817937014. Runs 31817114551 and 31817758247 FAILED first, which is what surfaced the reproducibility and line-ending defects."
       ],
       "regression_triggers": [
         "workflow_relocation",
@@ -937,6 +938,40 @@
         "ledger_format_change"
       ],
       "owner": "Red Lead + White",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "PROGRAM-CROSSPLATFORM-DETERMINISM-001",
+      "version": 1,
+      "claim": "Content-addressed files hash identically on Linux and Windows checkouts, and the harness provisions itself from a clean clone.",
+      "scope": {
+        "artifact": ".gitattributes + make_fixture_trust.py",
+        "environment": "ubuntu-latest and windows-latest"
+      },
+      "mechanism": {
+        "construction": "`* text=auto eol=lf` plus `-text` (no translation) on files hashed or signed over raw bytes; fixture trust material and engineering scaffolding generated on demand rather than committed."
+      },
+      "assumptions": [
+        "Contributors do not override core.autocrlf per-file.",
+        "Generated fixture material is TEST_ONLY and cannot satisfy formal mode."
+      ],
+      "evidence": [
+        "GitHub Actions run 31817937014: SUCCESS on ubuntu-latest and windows-latest",
+        "GitHub Actions run 31817758247: windows-latest FAILED with 'rule integrity check failed: endpoint.json' before the fix (NEGATIVE)",
+        "GitHub Actions run 31817114551: FAILED on missing fixture keys in a fresh clone before the fix (NEGATIVE)",
+        "local fresh-clone simulation: fixture material deleted, 10/10 gates PASS"
+      ],
+      "limitations": [
+        "Guards the files listed in .gitattributes. A new content-addressed file added without an entry is not covered.",
+        "Only ubuntu-latest and windows-latest are exercised; macOS is untested."
+      ],
+      "regression_triggers": [
+        "gitattributes_change",
+        "new_content_addressed_file",
+        "runner_os_change"
+      ],
+      "owner": "Program owner",
       "independent_reviewer": null,
       "status": "EVIDENCED"
     }

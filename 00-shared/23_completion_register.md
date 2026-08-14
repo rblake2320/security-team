@@ -24,11 +24,13 @@ asserted, never demonstrated.** Both were invisible to every existing gate.
 
 | # | Finding | State |
 |---|---|---|
-| **A0-1** | **The entire program directory was UNTRACKED.** 245 files, 2.5 MB, 157 tests — no git history, no backup, existing on one disk only. Not gitignored; simply never added | ⚠ **OPEN — needs your decision.** See A0-5 |
+| **A0-1** | **The entire program directory was UNTRACKED.** 251 files, 2.6 MB — no git history, no backup, one disk | ✅ **CLOSED** — committed and pushed to the private `pka-workspace` remote |
 | **A0-2** | **CI workflows were inert.** They sat at `Purple team/.github/workflows/`. GitHub Actions reads **only** `<repo-root>/.github/workflows/`, and the repo root is `PKA testing/`. They had never run and could not run. **Every claim whose evidence was "CI enforces X" was unevidenced** | ✅ **FIXED** — path-scoped workflow installed at the repo root |
 | **A0-3** | **No enforcement without GitHub.** Even once reachable, the gates only run on push to a host that executes Actions | ✅ **FIXED** — `00-shared/tools/run_ci.py` runs all 9 gates locally; `--assurance` fails closed |
 | **A0-4** | **Fixture private keys were unprotected.** `_fixture_private_keys.json` sat on disk with no `.gitignore`; the first commit would have written private keys into git history permanently | ✅ **FIXED** — `.gitignore` + falsification-tested detector (`PROGRAM-REPO-HYGIENE-001`) |
-| **A0-5** | **Repository placement decision** — commit into `pka-workspace`, or extract to a dedicated repo | ⚠ **OPEN — owner decision.** Dry run verified: 245 files, **0 secrets**, gitignore holding |
+| **A0-5** | **Repository placement** | ✅ **DECIDED** — committed to `pka-workspace` (private, verified) on branch `agent-evolution-loop-closure`. Extraction to a dedicated repo remains available later |
+| **A0-6** | **CI had never run.** First execution failed: fixture private keys are gitignored but fixture public keys were committed, so a fresh clone could not run the rehearsal | ✅ **FIXED** — trust material and engineering scaffolding are generated on demand; nothing signed is committed |
+| **A0-7** | **Windows-only integrity failure.** Git LF→CRLF translation altered the raw bytes that Sentinel Blue's rule manifest hashes | ✅ **FIXED** — `.gitattributes` with `-text` on content-addressed files. Green on ubuntu **and** windows, run `31817937014` |
 
 **Claims corrected as a result:** `PROGRAM-CI-SEPARATION-001` → v2. Its v1 asserted CI
 enforcement while the workflow was at a path Actions never reads.
