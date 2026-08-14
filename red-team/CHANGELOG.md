@@ -14,6 +14,33 @@ Covers **both** the team's governance documents and the Aegis implementation in 
 
 ---
 
+## [1.7.1] — 2026-08-14 — scan identity corrected to stable fields
+
+### Fixed
+- The descriptor identity check introduced in 1.7.0 compared `(st_dev, st_ino)`, which
+  **Linux inode reuse defeats** — ext4 recycles inode numbers, so a delete-and-recreate
+  can reproduce the same inode. Found by CI on `ubuntu-latest`; it passed on Windows,
+  where NTFS does not recycle a file index that quickly.
+- The first correction added `st_ctime_ns` and was **also wrong, in the opposite
+  direction**: measured 31/300 mismatches on Windows between a path `lstat` and a
+  handle `fstat` of the same untouched file, because NTFS serves the two from different
+  sources. That is a ~10% false-refusal rate — a scanner silently skipping 10% of files,
+  a worse failure than the defect being fixed.
+- That flakiness exposed the underlying error: **the test asserted a stronger property
+  than the control owns.** A file recreated at the same path inside the authorized root
+  is still inside the root, so reading it is authorized. It is not a scope violation.
+
+  The property is *never read content from outside the authorized root*, carried by
+  `O_NOFOLLOW` (final-component symlinks), identity comparison on stable fields
+  (hardlinks to out-of-scope files, swapped parent directories), and a post-open
+  re-`lstat` — the open pins the inode, so the path cannot be swapped underneath the
+  read.
+
+### Testing
+- Tests restated to the real property: hardlink-to-outside must be refused, and in-scope
+  replacement is **explicitly permitted** so the over-strict flaky rule is not
+  reintroduced. Measured 0/400 false refusals. Falsification-verified.
+
 ## [1.7.0] — 2026-08-14 — descriptor-verified scanning (RESIDUAL-HIGH)
 
 ### Changed
