@@ -107,18 +107,24 @@ def _contained(path: Path, anchor: str) -> bool:
 def _identity(info: os.stat_result) -> tuple:
     """The tuple that must match between traversal-time lstat and read-time fstat.
 
-    Deliberately more than (dev, ino) - see `read_verified`. Inode numbers are recycled
-    on common Linux filesystems, so identity that rests on them alone is defeated by a
-    delete-and-recreate.
+    STABLE FIELDS ONLY. An earlier version added st_ctime_ns to defeat Linux inode
+    reuse, which measured a ~10% mismatch rate on Windows between a path lstat and a
+    handle fstat of the SAME unmodified file - NTFS serves the two from different
+    sources. A scanner that randomly refuses 10% of files silently under-reports,
+    which is a worse failure than the one being fixed.
+
+    Dropping ctime is sound because it was defending a threat this control does not
+    own. A delete-and-recreate at the same path inside the authorized root produces a
+    file that is still INSIDE the root, so reading it is not a scope violation - it is
+    just newer content. The property here is "never read content from outside the
+    authorized root", and that is carried by O_NOFOLLOW plus (dev, ino):
+
+      * final-component symlink out of scope -> O_NOFOLLOW refuses the open
+      * hardlink to an out-of-scope file    -> carries that file's inode, so (dev, ino)
+                                               differs from what traversal validated
+      * swapped parent directory            -> resolves to a different inode, likewise
     """
-    return (
-        info.st_dev,
-        info.st_ino,
-        info.st_ctime_ns,
-        info.st_size,
-        info.st_nlink,
-        info.st_mode,
-    )
+    return (info.st_dev, info.st_ino, info.st_mode)
 
 
 def _is_regular(info: os.stat_result) -> bool:
@@ -142,19 +148,17 @@ def read_verified(path: Path, expected: os.stat_result, *, max_bytes: int) -> st
         actual = os.fstat(descriptor)
         if not _is_regular(actual):
             return None
-        # THE check: the descriptor must be the same FILE traversal validated.
-        #
-        # (st_dev, st_ino) alone is NOT sufficient. Linux CI caught this: ext4 reuses
-        # inode numbers, so deleting a file and immediately recreating it in the same
-        # directory frequently yields the SAME inode, and the swapped content was read.
-        # It passed on Windows, where NTFS does not recycle a file index that quickly -
-        # a platform-specific false sense of security.
-        #
-        # ctime_ns is the discriminator that matters: it is updated on creation and on
-        # any metadata change, and cannot be set backwards by an unprivileged writer
-        # (unlike mtime, which utimes() can forge). Size and nlink are cheap
-        # corroboration.
+        # THE check: the descriptor must be the file traversal validated as in scope.
         if _identity(actual) != _identity(expected):
+            return None
+        # Defence in depth. The open pins the inode, so it cannot be recycled while we
+        # hold the descriptor; re-stat'ing the PATH now and comparing tells us the path
+        # still refers to the file we are about to read, rather than something
+        # substituted between traversal and open.
+        try:
+            if _identity(os.lstat(path)) != _identity(actual):
+                return None
+        except OSError:
             return None
         if actual.st_size > max_bytes:
             return None

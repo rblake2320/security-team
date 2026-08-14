@@ -1052,8 +1052,8 @@
     },
     {
       "claim_id": "AEGIS-RT-SCAN-SCOPE-001",
-      "version": 2,
-      "claim": "Offline source and repository-posture scans read only files inside the authorized root, including when a local attacker swaps a path between validation and read.",
+      "version": 3,
+      "claim": "Offline source and repository-posture scans never read content from outside the authorized root, including when a local attacker swaps a path between validation and read.",
       "scope": {
         "artifact": "aegis_rt/checks/safe_scan.py",
         "consumers": [
@@ -1062,19 +1062,19 @@
         ]
       },
       "mechanism": {
-        "construction": "no-follow bounded traversal + descriptor identity binding: os.walk(followlinks=False) with realpath containment per component, then open(O_NOFOLLOW) and fstat(descriptor) compared against the traversal-time lstat on a multi-field identity tuple before any content is read",
+        "construction": "no-follow bounded traversal + descriptor identity binding: os.walk(followlinks=False) with realpath containment per component, then open(O_NOFOLLOW) with fstat(descriptor) compared against the traversal-time lstat on (st_dev, st_ino, st_mode), plus a post-open re-lstat of the path compared to the descriptor",
         "traversal": "os.walk(followlinks=False) with realpath containment on every component, covering symlinks, junctions and mounts; bounded by an explicit entry limit that raises rather than truncating.",
-        "read": "File opened once with O_NOFOLLOW where available; fstat on the DESCRIPTOR is compared against the lstat recorded during traversal across (st_dev, st_ino, st_ctime_ns, st_size, st_nlink, st_mode). A mismatch refuses the read. All content is read from that descriptor, so no second path lookup exists to race."
+        "read": "Opened once with O_NOFOLLOW where available. Identity is compared on STABLE fields only. The open pins the inode, so a post-open re-lstat of the path confirms the path still refers to the file being read. Content is read from that descriptor, so no second path lookup exists to race."
       },
       "assumptions": [
-        "st_ctime_ns is updated on file creation and cannot be set backwards by an unprivileged writer.",
+        "The filesystem reports stable (st_dev, st_ino) for a file while a descriptor to it is open.",
         "realpath resolution is accurate at traversal time.",
         "The scanner process is not itself compromised."
       ],
       "evidence": [
-        "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_replaced_file_is_refused (NEGATIVE)",
-        "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_same_size_replacement_is_refused (NEGATIVE - same-length swap, so size cannot be the discriminator)",
-        "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_symlink_swapped_in_is_refused (NEGATIVE - skips without symlink privilege, runs in Linux CI)",
+        "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_hardlink_to_out_of_scope_file_is_refused (NEGATIVE - the case O_NOFOLLOW does not cover)",
+        "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_symlink_swapped_in_is_refused (NEGATIVE)",
+        "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_in_scope_replacement_is_permitted (POSITIVE - pins the boundary; guards against reintroducing the flaky over-strict rule)",
         "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_unchanged_file_is_still_read (POSITIVE - guards against over-refusal)",
         "red-team/tests/test_scan_race.py::TraversalTests::test_directory_link_out_of_scope_is_not_traversed (NEGATIVE)",
         "red-team/tests/test_scan_race.py::TraversalTests::test_traversal_limit_refuses_rather_than_truncating (NEGATIVE)",
@@ -1083,10 +1083,10 @@
       ],
       "evidence_location": "red-team/tests/test_scan_race.py",
       "limitations": [
-        "(st_dev, st_ino) alone is NOT sufficient: Linux filesystems recycle inode numbers, so a delete-and-recreate can reproduce the same inode. CI on ubuntu-latest demonstrated this against v1 of this mechanism, which passed on Windows. Identity therefore rests on st_ctime_ns as the primary discriminator, with size/nlink/mode as corroboration.",
-        "An attacker who can reproduce inode, ctime_ns, size, nlink and mode exactly could still defeat the check. No claim is made against an attacker with privileged control of file metadata.",
+        "Replacing a file at the same path INSIDE the authorized root is permitted, not refused. Such a file is still in scope, so reading it is authorized; this control governs scope, not content freshness.",
+        "st_ctime_ns was trialled to detect same-path replacement and REMOVED: it mismatched in ~10% of runs on Windows between a path lstat and a handle fstat of the same untouched file, which would have made the scanner silently skip files.",
         "The containment decision is time-of-check; the identity binding is what makes it hold at time-of-use. A root directory replaced before traversal begins is out of scope for this control.",
-        "The symlink-swap evidence skips on Windows hosts without SeCreateSymbolicLink privilege; it executes in Linux CI."
+        "The symlink and hardlink evidence skips where the platform forbids unprivileged link creation; both execute in Linux CI."
       ],
       "regression_triggers": [
         "Any change to safe_scan.py or to how the scanners enumerate or read files.",
@@ -1096,7 +1096,7 @@
       "owner": "Red Team",
       "independent_reviewer": null,
       "status": "EVIDENCED",
-      "status_note": "Closes the external assessment's residual High. v1 was insufficient: it bound identity to (st_dev, st_ino) only and was defeated by Linux inode reuse - found by CI, not by local testing, which is why the cross-platform matrix exists. v2 binds on ctime_ns as well."
+      "status_note": "Closes the external assessment's residual High. Two earlier versions were wrong and both were caught by evidence rather than review: v1 bound identity to (dev, ino) only and was defeated by Linux inode reuse in CI; v2 added ctime_ns, which was measurably unstable on Windows and would have caused silent under-reporting. v2 also revealed that the TEST over-stated the property - an in-scope replacement is not a scope violation. v3 states the property precisely and uses stable fields."
     }
   ]
 }

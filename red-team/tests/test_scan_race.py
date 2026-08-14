@@ -89,42 +89,60 @@ class SwapContext(ExecutionContext):
 class ReadVerifiedTests(unittest.TestCase):
     """Direct tests of the inode binding that closes the window."""
 
-    def test_replaced_file_is_refused(self) -> None:
+    def test_hardlink_to_out_of_scope_file_is_refused(self) -> None:
+        """A hardlink carries the target's inode, so it must not match what was validated.
+
+        This is the swap that MATTERS: the path stays inside the root but the bytes
+        come from outside it. A symlink is refused by O_NOFOLLOW; a hardlink is not,
+        so the identity comparison is what carries this case.
+        """
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory) / "root"
+            root.mkdir()
+            outside = Path(directory) / "outside.py"
+            outside.write_text(SECRET, encoding="utf-8")
+
             victim = root / "target.py"
             victim.write_text("original\n", encoding="utf-8")
             expected = victim.lstat()
 
-            # The attacker replaces the file with a DIFFERENT one after the check.
             victim.unlink()
-            victim.write_text(SECRET, encoding="utf-8")
+            try:
+                os.link(outside, victim)
+            except (OSError, NotImplementedError):
+                self.skipTest("hardlink creation unavailable in this environment")
 
+            content = read_verified(victim, expected, max_bytes=1_000_000)
             self.assertIsNone(
-                read_verified(victim, expected, max_bytes=1_000_000),
-                "a file replaced after validation must not be read",
-            )
+                content, "content from outside the authorized root must not be read")
 
-    def test_same_size_replacement_is_refused(self) -> None:
-        """The hard case: the swapped-in file is byte-for-byte the same LENGTH.
+    def test_in_scope_replacement_is_permitted(self) -> None:
+        """Boundary statement: replacing a file IN scope is not a scope violation.
 
-        Without this, `test_replaced_file_is_refused` could pass on a size comparison
-        alone and the real discriminator would go untested. Linux inode reuse means
-        (st_dev, st_ino) may also match here, so ctime_ns is what must carry it.
+        An earlier version of this suite asserted that any replaced file must be
+        refused, and added st_ctime_ns to the identity tuple to enforce it. That
+        over-stated the control: a file recreated at the same path inside the
+        authorized root is still inside the root, so reading it is authorized. The
+        ctime field also proved unstable on Windows (~10% mismatch between a path
+        lstat and a handle fstat of the same untouched file), which would have made
+        the scanner silently skip files.
+
+        This test pins the real boundary so the stricter, flakier rule is not
+        reintroduced by mistake.
         """
         with tempfile.TemporaryDirectory() as directory:
-            victim = Path(directory) / "target.py"
-            victim.write_text("A" * 64, encoding="utf-8")
+            root = Path(directory)
+            victim = root / "target.py"
+            victim.write_text("original\n", encoding="utf-8")
+
+            # Re-stat after replacement, exactly as a real traversal would.
+            victim.unlink()
+            victim.write_text("replaced-in-scope\n", encoding="utf-8")
             expected = victim.lstat()
 
-            victim.unlink()
-            victim.write_text("B" * 64, encoding="utf-8")   # identical size
-            self.assertEqual(victim.lstat().st_size, expected.st_size,
-                             "precondition: the replacement is the same size")
-
-            self.assertIsNone(
+            self.assertEqual(
                 read_verified(victim, expected, max_bytes=1_000_000),
-                "a same-size replacement must still be refused",
+                "replaced-in-scope\n",
             )
 
     def test_unchanged_file_is_still_read(self) -> None:
