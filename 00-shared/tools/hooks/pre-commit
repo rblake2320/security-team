@@ -1,6 +1,6 @@
 #!/bin/sh
-# Purple team pre-commit gate.
-# Installed by: python "Purple team/00-shared/tools/install_hooks.py"
+# security-team pre-commit gate.
+# Installed by: python "00-shared/tools/install_hooks.py"
 #
 # Runs the engineering gates when program files are staged. Enforcement must not
 # depend on a human remembering to run the runner.
@@ -9,7 +9,7 @@
 # commit message.
 
 set -e
-PROGRAM="Purple team"
+PROGRAM="."
 
 if ! git diff --cached --name-only | grep -q "^$PROGRAM/"; then
     exit 0

@@ -153,7 +153,7 @@ Program owner governance review, 2026-08-14. Full record: [`00-shared/21`](../00
 - **R-1:** `Owner's Inbox/2026-08-13_sentinel-blue-defensive-platform.md` and
   `Team/tasks/20260813-sentinel-blue-defensive-platform.md` still reference
   `PKA testing\blue team` — a path that stopped existing when the folder was moved under
-  `Purple team/`, before this review. Editing PKA delivery records is an owner decision.
+  ``, before this review. Editing PKA delivery records is an owner decision.
 - **R-3:** `rules/` will drift from Green's future detection-as-code repo until one is declared
   canonical.
 - **R-4:** Blue's severity labels are a *response* clock; the program's severity SLAs are a

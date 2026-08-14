@@ -27,11 +27,20 @@ def repo_root() -> Path | None:
     return Path(p.stdout.strip()) if p.returncode == 0 and p.stdout.strip() else None
 
 
+ENGINEERING_WORKFLOW = "engineering-integrity.yml"
+
+
 def workflow_text() -> str | None:
+    """The engineering workflow at the repository root.
+
+    The program is now its own repository, so <repo-root>/.github/workflows/ IS the
+    program's workflow directory. The former `purple-team-integrity.yml` existed only
+    to bridge the nesting problem (the program used to live inside another repo, where
+    a nested workflow was inert). That bridge is no longer needed."""
     root = repo_root()
     if root is None:
         return None
-    wf = root / ".github" / "workflows" / "purple-team-integrity.yml"
+    wf = root / ".github" / "workflows" / ENGINEERING_WORKFLOW
     return wf.read_text(encoding="utf-8") if wf.is_file() else None
 
 

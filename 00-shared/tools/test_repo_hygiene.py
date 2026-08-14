@@ -5,7 +5,7 @@ program: a mechanism asserted, never demonstrated.
 
   1. The entire Purple team directory was UNTRACKED. 200+ files, 157 tests, no
      version control, no history, no backup.
-  2. The CI workflows sat at `Purple team/.github/workflows/`. GitHub Actions only
+  2. The CI workflows sat at `.github/workflows/`. GitHub Actions only
      reads `<repo-root>/.github/workflows/`, and the repo root is `PKA testing/`.
      The workflows had never run and COULD not run. Every claim whose evidence was
      "CI enforces X" was therefore unevidenced.
@@ -78,11 +78,11 @@ class RepoHygieneTests(unittest.TestCase):
         """NEGATIVE / FALSIFICATION. A clean repository proves nothing unless the
         detector actually catches a leak. Feed it poisoned input and require a catch."""
         poisoned = [
-            "Purple team/exercise/tests/fixtures/trust/_fixture_private_keys.json",
-            "Purple team/authority.pem",
-            "Purple team/keys/clearance.key",
-            "Purple team/config/white_private_signing.json",
-            "Purple team/EXERCISE/TESTS/FIXTURES/TRUST/_FIXTURE_PRIVATE_KEYS.JSON",  # case
+            "exercise/tests/fixtures/trust/_fixture_private_keys.json",
+            "authority.pem",
+            "keys/clearance.key",
+            "config/white_private_signing.json",
+            "EXERCISE/TESTS/FIXTURES/TRUST/_FIXTURE_PRIVATE_KEYS.JSON",  # case
         ]
         for path in poisoned:
             with self.subTest(leak=path):
@@ -92,10 +92,10 @@ class RepoHygieneTests(unittest.TestCase):
     def test_detector_does_not_flag_ordinary_files(self):
         """NEGATIVE. A detector that flags everything is equally useless."""
         benign = [
-            "Purple team/README.md",
-            "Purple team/exercise/tests/fixtures/trust/fixture-white-2026.json",  # public key
-            "Purple team/00-shared/config/assurance_claims.json",
-            "Purple team/red-team/src/aegis_rt/authorization.py",
+            "README.md",
+            "exercise/tests/fixtures/trust/fixture-white-2026.json",  # public key
+            "00-shared/config/assurance_claims.json",
+            "red-team/src/aegis_rt/authorization.py",
         ]
         self.assertEqual(detect_leaks(benign), [],
                          "detector produced false positives on ordinary files")
@@ -130,7 +130,7 @@ class CiReachabilityTests(unittest.TestCase):
                         f"repo root {root} has no .github/workflows; program CI cannot run")
         names = {p.name for p in root_wf.glob("*.yml")} | {p.name for p in root_wf.glob("*.yaml")}
         self.assertIn(
-            "purple-team-integrity.yml", names,
+            "engineering-integrity.yml", names,
             "the program's CI workflow is not present at the repository root, so GitHub "
             "Actions will never execute it. A workflow file in a nested directory is inert.")
 
@@ -139,7 +139,7 @@ class CiReachabilityTests(unittest.TestCase):
         root = repo_root()
         if root is None:
             self.skipTest("not a git repository")
-        wf = root / ".github" / "workflows" / "purple-team-integrity.yml"
+        wf = root / ".github" / "workflows" / "engineering-integrity.yml"
         if not wf.is_file():
             self.skipTest("root workflow not yet installed (see test above)")
         text = wf.read_text(encoding="utf-8")

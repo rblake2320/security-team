@@ -1,4 +1,6 @@
-# Five-Team Security Operating Model — Purple / White / Yellow / Green / Orange
+# Security Team — Seven-Team Security Operating Model
+
+**Purple · White · Yellow · Green · Orange · Blue · Red**
 
 **Document set version:** 1.3
 **Date:** 2026-08-14
@@ -37,7 +39,7 @@ and workforce capability.
 **One folder per team**, plus a shared folder for everything cross-cutting.
 
 ```
-Purple team/
+
 ├── README.md              <- you are here: assumptions, Open Decisions, legend
 ├── 00-shared/             <- cross-team design (§1, §3-§18)
 ├── purple-team/           <- + runnable: Aegis Purple assurance core (src/ docs/ schemas/ tests/)

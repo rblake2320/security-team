@@ -25,8 +25,8 @@ from pathlib import Path
 
 PROGRAM = Path(__file__).resolve().parents[2]
 SRC = Path(__file__).resolve().parent / "hooks" / "pre-commit"
-MARK = '# --- purple-team gate (managed by "Purple team/00-shared/tools/install_hooks.py") ---'
-END = "# --- end purple-team gate ---"
+MARK = '# --- security-team gate (managed by "00-shared/tools/install_hooks.py") ---'
+END = "# --- end security-team gate ---"
 
 
 def gate_block() -> str:
@@ -55,12 +55,12 @@ def main() -> int:
     if dest.exists():
         existing = dest.read_text(encoding="utf-8")
         if MARK in existing:
-            print(f"purple-team gate already chained onto {dest}")
+            print(f"security-team gate already chained onto {dest}")
             return 0
         if not args.force:
             print(f"a pre-commit hook already exists at {dest}")
             print("CHAINING is the correct action - never clobber a shared workspace hook.")
-            print("Re-run with --force to insert the purple-team gate into it.")
+            print("Re-run with --force to insert the security-team gate into it.")
             return 1
 
         # Insert before the final `exit 0`; appending after it would never run.
@@ -71,7 +71,7 @@ def main() -> int:
         else:
             merged = existing.rstrip() + "\n" + gate_block()
         dest.write_text(merged, encoding="utf-8")
-        print(f"chained purple-team gate onto the existing hook at {dest}")
+        print(f"chained security-team gate onto the existing hook at {dest}")
         print("the pre-existing checks still run first and are untouched")
         return 0
 

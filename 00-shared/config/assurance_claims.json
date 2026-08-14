@@ -812,7 +812,7 @@
       "version": 1,
       "claim": "Fixture private keys and commitment opening material exist on disk for engineering use but can never enter version control.",
       "scope": {
-        "artifact": "Purple team/.gitignore",
+        "artifact": ".gitignore",
         "environment": "git"
       },
       "mechanism": {

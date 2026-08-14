@@ -25,7 +25,7 @@ asserted, never demonstrated.** Both were invisible to every existing gate.
 | # | Finding | State |
 |---|---|---|
 | **A0-1** | **The entire program directory was UNTRACKED.** 251 files, 2.6 MB — no git history, no backup, one disk | ✅ **CLOSED** — committed and pushed to the private `pka-workspace` remote |
-| **A0-2** | **CI workflows were inert.** They sat at `Purple team/.github/workflows/`. GitHub Actions reads **only** `<repo-root>/.github/workflows/`, and the repo root is `PKA testing/`. They had never run and could not run. **Every claim whose evidence was "CI enforces X" was unevidenced** | ✅ **FIXED** — path-scoped workflow installed at the repo root |
+| **A0-2** | **CI workflows were inert.** They sat at `.github/workflows/`. GitHub Actions reads **only** `<repo-root>/.github/workflows/`, and the repo root is `PKA testing/`. They had never run and could not run. **Every claim whose evidence was "CI enforces X" was unevidenced** | ✅ **FIXED** — path-scoped workflow installed at the repo root |
 | **A0-3** | **No enforcement without GitHub.** Even once reachable, the gates only run on push to a host that executes Actions | ✅ **FIXED** — `00-shared/tools/run_ci.py` runs all 9 gates locally; `--assurance` fails closed |
 | **A0-4** | **Fixture private keys were unprotected.** `_fixture_private_keys.json` sat on disk with no `.gitignore`; the first commit would have written private keys into git history permanently | ✅ **FIXED** — `.gitignore` + falsification-tested detector (`PROGRAM-REPO-HYGIENE-001`) |
 | **A0-5** | **Repository placement** | ✅ **DECIDED** — committed to `pka-workspace` (private, verified) on branch `agent-evolution-loop-closure`. Extraction to a dedicated repo remains available later |

@@ -9,7 +9,7 @@ Exit 0 = all gates pass. Exit 1 = a gate failed.
 
 WHY THIS EXISTS
     On 2026-08-14 the program's CI workflows were found at
-    `Purple team/.github/workflows/`. GitHub Actions reads only
+    `.github/workflows/`. GitHub Actions reads only
     `<repo-root>/.github/workflows/`, so they were inert and had never run. Every
     claim whose evidence was "CI enforces X" was unevidenced.
 
