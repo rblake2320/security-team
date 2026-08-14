@@ -3,6 +3,14 @@
   "purpose": "SINGLE SOURCE OF TRUTH for the engineering gate list. The local runner and the GitHub workflow both derive from this file; a drift guard asserts the workflow covers every gate. Two hand-maintained gate lists WILL diverge.",
   "engineering_gates": [
     {
+      "id": "static",
+      "name": "static analysis + compile",
+      "kind": "command",
+      "argv": [
+        "00-shared/tools/run_static.py"
+      ]
+    },
+    {
       "id": "repo-hygiene",
       "name": "repository hygiene + CI reachability",
       "kind": "unittest",
@@ -92,6 +100,7 @@
   "rules": [
     "Adding a gate here without adding it to the root workflow fails test_gate_manifest.py.",
     "Engineering gates may pass under an explicit readiness hold.",
-    "Assurance gates must fail closed while any readiness gate is false."
+    "Assurance gates must fail closed while any readiness gate is false.",
+    "The manifest must be a SUPERSET of the workflow's gates. A gate present in the workflow but absent here runs in CI and not locally - which is how a ruff failure reached CI on 2026-08-14."
   ]
 }

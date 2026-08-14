@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Markdown relative-link integrity gate. Exit 1 on any broken link."""
-import os, re, sys
+import os
+import re
+import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 bad = []
 for base, dirs, files in os.walk(ROOT):

@@ -29,9 +29,10 @@ jobs:
           python -m pip install --disable-pip-version-check -r tools/requirements-ci.txt
           python -m pip install --disable-pip-version-check --no-deps --no-build-isolation -e purple-team -e red-team
       - name: Static and compilation gates
-        run: |
-          python -m ruff check purple-team/src purple-team/tests red-team/src red-team/tests blue-team/src blue-team/tests 00-shared/tools tools exercise
-          python -m compileall -q purple-team/src purple-team/tests red-team/src red-team/tests blue-team/src blue-team/tests 00-shared/tools tools exercise
+        # Single source of truth: 00-shared/tools/run_static.py, also invoked by the
+        # local runner. Duplicating the target list here is how ruff ran in CI but not
+        # locally, and a lint error reached CI on 2026-08-14.
+        run: python 00-shared/tools/run_static.py
       - name: Runtime dependency vulnerability gate
         run: python -m pip_audit -r tools/requirements-runtime.txt --disable-pip --progress-spinner off
       - name: Shared cryptographic commitment tests
