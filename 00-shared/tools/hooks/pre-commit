@@ -1,0 +1,32 @@
+#!/bin/sh
+# Purple team pre-commit gate.
+# Installed by: python "Purple team/00-shared/tools/install_hooks.py"
+#
+# Runs the engineering gates when program files are staged. Enforcement must not
+# depend on a human remembering to run the runner.
+#
+# Bypass with `git commit --no-verify` only when you intend to, and say so in the
+# commit message.
+
+set -e
+PROGRAM="Purple team"
+
+if ! git diff --cached --name-only | grep -q "^$PROGRAM/"; then
+    exit 0
+fi
+
+echo "pre-commit: program files staged - running engineering gates"
+
+# Refuse secrets outright, before running anything else.
+LEAKS=$(git diff --cached --name-only | grep -iE '_fixture_private_keys|\.pem$|\.key$|_private.*\.json$' || true)
+if [ -n "$LEAKS" ]; then
+    echo "BLOCKED: secret-shaped files are staged:"
+    echo "$LEAKS" | sed 's/^/  /'
+    echo "Remove them from the index. They are gitignored for a reason."
+    exit 1
+fi
+
+python "$PROGRAM/00-shared/tools/run_ci.py" || {
+    echo "BLOCKED: engineering gates failed. Fix them, or commit with --no-verify and explain why."
+    exit 1
+}

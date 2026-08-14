@@ -1,0 +1,7 @@
+{
+  "key_id": "fixture-clearance-2026",
+  "role": "preflight clearance issuer",
+  "environment": "TEST_ONLY",
+  "public_key": "8d4Agko/SFqBQpRCADyULgNaj7Ej9/WlERSCR2MRKV0=",
+  "WARNING": "FIXTURE KEY. Can never satisfy a production gate. Formal mode refuses it."
+}

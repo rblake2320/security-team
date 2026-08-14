@@ -1,0 +1,227 @@
+# .init — machine-readable team manifest (YAML)
+# Read this to bootstrap as, or route work to, the Red Team.
+# Authoritative prose lives in CHARTER.md; this file must not contradict it.
+# NOTE: like blue-team, this folder is RUNNABLE CODE (Aegis Red Team).
+init_version: "1.0"
+schema_owner: "00-shared/02_org_structure_and_raci.md"
+
+team:
+  id: red
+  name: "Red Team"
+  color: "#dc2626"
+  folder: red-team
+  function: "Independent adversary emulation and authorized offensive assessment"
+  mission: >
+    Execute authorized offensive assessment that produces INDEPENDENT evidence of
+    whether controls work — under written authorization, inside a fingerprinted
+    scope, with every action rate-limited, stoppable, and auditable.
+  lead_role: "Red Team Lead"
+  reports_to: "CISO (or contract manager for external Red)"
+  must_not_report_to:
+    - "Purple Lead   # Purple must be able to critique Red's coverage without managing Red"
+    - "Any engineering leader whose systems Red assesses"
+  # CORRECTED 2026-08-14 by governance decision. "Independent" is FOUR requirements.
+  independence:
+    from_development: SATISFIED          # Red does not report through Yellow or Orange
+    from_defense_operations: SATISFIED   # Red does not operate or own Blue's controls
+    exercise_scoring: NOT_SATISFIED      # Red cannot score an exercise it participated in
+                                         # -> Exercise Assurance (00-shared/18)
+    organizational_assessment: NOT_SATISFIED  # external 3PAO / C3PAO / QSA required
+  statement_of_record: >
+    Red closes the internal technical-assessment independence gap where organizational and
+    framework requirements permit internal assessment. Red does not satisfy independent
+    exercise scoring when Red participated, nor external organizational-assessor
+    requirements such as 3PAO, C3PAO, or QSA independence.
+  dedicated_or_virtual:
+    P1: "contracted — 2x per year, tasked by Purple, authorized by White"
+    P2: "1.0 FTE internal + contracted independent assessment 1-2x/yr"
+    P3: "2.0-4.0 FTE internal + external assessor for the formal annual assessment"
+
+implementation:
+  name: "Aegis Red Team"
+  package: aegis_rt
+  version: "0.1.0"
+  language: python
+  requires_python: ">=3.11"
+  dependencies: ["cryptography>=44"]
+  entrypoint: "python -m aegis_rt        # installed: aegis-rt"
+  source: src/aegis_rt/
+  tests: tests/
+  test_count: 14
+  test_status: "13 passed, 1 skipped"
+  test_verified: "2026-08-14"
+  test_command: 'PYTHONPATH=src python -m unittest discover -s tests'
+  skipped_test:
+    name: test_source_link_cannot_escape_authorized_root
+    reason: "Windows symlink privilege not held (WinError 1314)"
+    impact: "Guards a path-escape containment boundary — UNPROVEN on this machine (residual R-6)"
+    fix: "Run under Developer Mode / elevation, or in Linux CI"
+  cli_commands: [list-checks, keygen, fingerprint, authorize, validate, plan, run, verify-ledger, seal-ledger]
+  modules: [scope, authorization, audit, engine, models, report, cli, checks]
+  checks_available: ["source.static", "http.headers"]
+  deliberately_excluded:
+    - credential_theft
+    - persistence
+    - evasion
+    - malware
+    - destructive_payloads
+    - uncontrolled_scanning
+    - arbitrary_shell_commands
+    - plugin_loading
+
+files:
+  charter: CHARTER.md
+  playbook: PLAYBOOK.md
+  artifacts: ARTIFACTS.md
+  ai_agent: AI_AGENT.md
+  changelog: CHANGELOG.md
+  readme: README.md
+  security: SECURITY.md
+  example_engagement: examples/engagement.json
+
+# The distinction that gets blurred everywhere else:
+three_way_boundary:
+  red:    "EXECUTES. Independent of the builders. Lab/pre-prod/prod under RoE. CAN produce independent-assessment evidence."
+  purple: "COORDINATES and MEASURES. Moderate independence. Observes everywhere."
+  orange: "REVIEWS DESIGNS pre-build. Deliberately NOT independent (embedded). CANNOT produce independent-assessment evidence (F-1)."
+  frameworks_requiring_red: ["NIST 800-53 CA-2(1)", "NIST 800-53 SA-11(5)", "FedRAMP", "PCI DSS 11.4"]
+
+owns:
+  workflow_stages: [8]
+  contributes_to_stages: [6, 9, 12]
+  gates_enforced:
+    - "No run without a signed, unexpired, fingerprint-bound authorization receipt"
+    - "Scope fingerprint acknowledged BY HAND at execution time — never copied forward"
+    - "Ambiguity resolves to OUT OF SCOPE, always"
+    - ".aegis/STOP halts at the next safety boundary; resume requires engagement-owner + White"
+  artifacts:
+    - "Engagement definition"
+    - "Scope fingerprint"
+    - "Authorization receipt   # RECEIVES, does not issue"
+    - "Execution plan"
+    - "Finding (normalized, CWE, redacted)"
+    - "Audit ledger + Ed25519 seal"
+    - "Assessment report"
+    - "Check definitions"
+  metrics:
+    - "runs under valid authorization (target 100%)"
+    - "out-of-scope actions (target 0)"
+    - "unredacted secrets in output (target 0)"
+    - "ledger verify + seal success (100%)"
+    - "findings reproducible without Red present (>=90%)"
+  contributes_to: [M-1, M-2, M-3]
+
+authority:
+  decides:
+    - "How to execute an approved test case"
+    - "Whether a target resolves inside the authorized scope — and DENIES on ambiguity"
+    - "Halting its own activity"
+    - "Technical validity of a finding"
+    - "Check development and registry inclusion (peer reviewed)"
+  denied:
+    - "Authorizing its own engagements — the signing key is held by the approval authority"
+    - "Choosing what is worth testing (Purple proposes, White approves)"
+    - "Setting finding severity (Purple proposes, White adjudicates)"
+    - "Scope expansion — a new fingerprint requires a new authorization"
+    - "Holding production credentials"
+    - "Risk acceptance"
+
+key_model:                                # target state - see 00-shared/19_aegis_trust_model.md
+  authorization_key: "White approval authority   -- Red must NEVER hold this"
+  execution_key:     "Red execution service      -- Red signs what it ATTEMPTED"
+  evidence_key:      "append-only evidence service"
+  assessment_key:    "Exercise Assurance"
+  emergency_revocation_key: "designated executive authority"
+  invariants:
+    - "No execution without a valid White authorization signature."
+    - "No execution outside the signed scope or time window."
+    - "Red may attest to what it executed but cannot authorize that execution."
+    - "Red cannot rewrite or independently seal the evidence ledger."
+    - "White cannot score its own performance."
+    - "The assessor cannot alter execution evidence."
+  current_state: >
+    NOT YET MET. Aegis v0.1.0 has ONE signature domain -- 'authorize --signing-key' and
+    'seal-ledger --signing-key' use the same key (verified 2026-08-14). The approval
+    authority could therefore in principle re-seal a modified ledger. Splitting the
+    evidence key from the authorization key is migration step 1 and is small.
+
+separation_of_duties:
+  - "CRYPTOGRAPHIC SoD: Red can execute but cannot authorize. The authorization key stays with the approval authority."
+  - "Red never scores itself, and never scores an exercise it ran (Exercise Assurance does)." 
+  - "SoD-9 — per-engagement identities issued by an identity owner outside the team"
+  - "SoD-7 — may not both discover and exploit a production-exploitable issue (report to CSIRT)"
+  - "The ledger seal is applied by the APPROVAL AUTHORITY, not by Red — making the evidence independent of the operator"
+
+depends_on:
+  white: "Authorization receipt, trust key, approved RoE, stop/resume decisions"
+  purple: "Test cases, scenario, ATT&CK mapping, outcome scoring"
+  system_owners: "Engagement authorization and window"
+  orange: "Threat models and attack paths to inform execution"
+
+provides_to:
+  purple: "Execution results and timeline for six-stage scoring (stages 1-3)"
+  white: "Sealed audit ledger + seal + trust key for the evidence manifest"
+  green: "Exact action detail — timestamps, source, identity — for detection work"
+  yellow: "Reproduction detail"
+  grc: "Independent assessment evidence (compliance layer L2)"
+  orange: "Operator rotation, 1-2 weeks per quarter"
+
+integrations:
+  why_engine:
+    recall_before: "finding write-up — has this root cause appeared before?"
+    publish_target: outbox
+    sensitivity_floor: internal
+    note: "Attack paths and assessment findings are CONFIDENTIAL — never promoted, never public"
+  soul_system:
+    markers: ["SOUL-PAIN:"]
+    emits_on: ["scope ambiguity encountered", "authorization expired mid-run"]
+    never_emit: ["target identifiers", "findings", "credentials", "CUI"]
+  aegis_and_roe:
+    relationship: >
+      Aegis MECHANIZES the RoE but does not replace it. Its own SECURITY.md says the
+      authorization receipt is "not a substitute for legal authorization, change control,
+      stakeholder notification, or an emergency plan."
+    maps_to_roe:
+      "5.1 written authorization": "Ed25519 signed receipt, named approver, real ticket, expiry"
+      "5.3 in-scope assets": "targets allow-list; public denied unless opted in"
+      "5.5/5.6 permitted/prohibited actions": "fixed check registry; no shell, no plugins"
+      "5.7 approved tools": "bounded built-in registry"
+      "5.10 test schedule": "expires_at on the receipt"
+      "5.13 stop conditions": ".aegis/STOP kill switch"
+      "5.16 evidence handling": "hash-chained ledger + Ed25519 seal + redacted evidence"
+    not_covered_by_aegis:
+      - "Legal and privacy sign-off"
+      - "System-owner authorization signature"
+      - "Emergency contact roster"
+      - "Deconfliction with the SOC"
+      - "Rollback and recovery plans"
+      - "Insurance / regulatory notification"
+
+staffing:
+  minimum: { P1: 0.0, P2: 1.0, P3: 2.0 }     # P1 = contracted only
+  mature:  { P1: 0.0, P2: 2.0, P3: 6.0 }
+
+adversarial_review:
+  status: not_started
+  owner: orange
+  question: >
+    How would an adversary — or an impatient operator — get Aegis to execute outside
+    the authorized scope while the tool still reports itself as operating correctly?
+    Start with the stale-fingerprint path.
+
+bootstrap:
+  - "PYTHONPATH=src python -m unittest discover -s tests   # expect 14 (1 skip on Windows)"
+  - "python -m aegis_rt list-checks"
+  - "CONFIRM the signing key is NOT on any operator machine — if it is, halt and rotate"
+  - "python -m aegis_rt validate <engagement>.json  then  plan  -> capture the fingerprint"
+  - "Approval authority signs on THEIR machine; Red receives receipt + public trust key only"
+  - "Acknowledge the fingerprint BY HAND at run time — never paste from an old plan"
+  - "verify-ledger, then hand ledger + seal + trust key to White at close"
+  - "Resolve R-6: run the suite where symlink creation is permitted"
+
+blind_phase_rule: >
+  Collaborative by default. A blind phase is a WHITE-AUTHORIZED TEST MODE requiring a signed
+  objective, named blinded participants, enumerated withheld information, a bounded window, a
+  declassification trigger, named safety observers, and live deconfliction. It EXPIRES
+  AUTOMATICALLY at 'end' and must not continue merely because nobody ended it. Extension
+  requires a new signature. Schema: 00-shared/04_rules_of_engagement_template.md sec 5.10.1

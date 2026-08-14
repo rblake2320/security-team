@@ -1,0 +1,24 @@
+{
+  "schema": "aegis.purple.role-trust/1.0",
+  "keys": [
+    {
+      "key_id": "white-2026-01",
+      "role": "white",
+      "status": "active",
+      "public_key_base64": "REPLACE_WITH_32_BYTE_ED25519_PUBLIC_KEY_BASE64"
+    },
+    {
+      "key_id": "purple-2026-01",
+      "role": "purple",
+      "status": "active",
+      "public_key_base64": "REPLACE_WITH_32_BYTE_ED25519_PUBLIC_KEY_BASE64"
+    },
+    {
+      "key_id": "exercise-assurance-2026-01",
+      "role": "exercise_assurance",
+      "status": "active",
+      "public_key_base64": "REPLACE_WITH_32_BYTE_ED25519_PUBLIC_KEY_BASE64"
+    }
+  ]
+}
+

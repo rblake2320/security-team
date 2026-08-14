@@ -1,0 +1,50 @@
+# Detection-as-code template. One file per detection. Spec: ../ARTIFACTS.md
+id: DET-NNNN                       # stable, never reused
+name: ""
+version: 1.0
+status: draft                      # draft | testing | production | deprecated
+severity:                          # critical | high | medium | low
+author:
+peer_reviewed_by:                  # REQUIRED, never the author (SoD-1)
+created:
+deployed_to_production:            # you WILL be asked when this detection began to exist
+
+attack:
+  - tactic: TA####
+    technique: T####.###
+
+source_gap: GAP-YYYY-NNNN          # traceability back to the finding
+source_finding: FND-YYYY-NNNN
+
+data_sources:
+  - name: ""
+    required_fields: []
+    health_dependency: true        # if this source is down, THIS DETECTION IS DOWN
+
+logic_summary: >                   # behaviour, not signature
+query: |
+
+expected_volume_per_week: ""       # if you cannot estimate it, you do not understand the data yet
+expected_fp_drivers: []            # name them BEFORE building
+
+tuning:
+  exclusions: []                   # every exclusion documented, dated, and expiring
+  last_tuned:
+  fp_rate_30d:
+
+testing:
+  unit_test:
+  fired_in_nonprod: false          # a detection never observed to fire is a HYPOTHESIS
+  fired_in_nonprod_date:
+  validated_by_purple: false       # SoD-1 - Green does not self-attest
+  validated_date:
+  test_case_ref:
+
+response:
+  runbook:
+  queue:
+  automated_actions: []            # destructive actions need TWO approvers + rollback (C-8)
+
+lifecycle:
+  review_due:                      # annual
+  retire_if: "Zero true positives in 12 months AND a preventive control is deployed"

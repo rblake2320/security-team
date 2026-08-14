@@ -1,0 +1,11 @@
+{
+  "schema": "purple.first-run-traceability/1.0",
+  "exercise_id": "EX-2026-001",
+  "test_case_id": "TC-IDOR-001",
+  "abuse_case_id": "AC-IDOR-001",
+  "detection_id": "DET-CROSS-PROJECT-001",
+  "fix_id": "FIX-OBJECT-SCOPE-001",
+  "control_id": "CTRL-DB-PROJECT-SCOPE-001",
+  "retest_id": "RT-IDOR-001",
+  "stages": ["prevented", "logged", "alerted", "investigated", "contained", "reported"]
+}

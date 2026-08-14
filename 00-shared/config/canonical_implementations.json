@@ -1,0 +1,23 @@
+{
+  "schema": "canonical-implementations/1.0",
+  "package_identities": {
+    "aegis-red-team": {
+      "canonical_path": "red-team",
+      "archive_paths": [],
+      "decision_date": "2026-08-14",
+      "decision_owner": "Program owner"
+    },
+    "aegis-purple-team": {
+      "canonical_path": "purple-team",
+      "archive_paths": [],
+      "decision_date": "2026-08-14",
+      "decision_owner": "Program owner"
+    },
+    "sentinel-blue": {
+      "canonical_path": "blue-team",
+      "archive_paths": [],
+      "decision_date": "2026-08-14",
+      "decision_owner": "Program owner"
+    }
+  }
+}

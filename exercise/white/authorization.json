@@ -1,0 +1,15 @@
+{
+  "schema": "purple.rehearsal-authorization/1.0",
+  "exercise_id": "EX-2026-001",
+  "mode": "ENGINEERING_REHEARSAL",
+  "assessment_state": "PREREQUISITES_PENDING",
+  "result_marking": "TRAINING_OR_ENGINEERING_USE_ONLY",
+  "target": "exercise/target",
+  "synthetic_data_only": true,
+  "network_egress": "blocked",
+  "allowed_test_ids": ["TC-IDOR-001"],
+  "valid_from": "2026-08-14T00:00:00-05:00",
+  "expires_at": "2027-08-14T00:00:00-05:00",
+  "key_id": "fixture-white-2026",
+  "signature": "MirUxSRl/W+0k8Jz70+9HQEPJqgmuVGaaWHNlWVcEev6JHq7dBIClmyvl7eDOE+O5ADTB0iIwvYHZYeZygqcDg=="
+}

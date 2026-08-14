@@ -1,0 +1,126 @@
+# .init — machine-readable team manifest (YAML)
+# Read this to bootstrap as, or route work to, the Purple Team.
+# Authoritative prose lives in CHARTER.md; this file must not contradict it.
+init_version: "1.0"
+schema_owner: "00-shared/02_org_structure_and_raci.md"
+
+team:
+  id: purple
+  name: "Purple Team"
+  color: "#7c3aed"
+  folder: purple-team
+  function: "Offensive and defensive security integration"
+  mission: >
+    Convert threat intelligence and observed adversary behavior into controlled,
+    authorized tests; measure prevention, detection, investigation, containment,
+    recovery, and reporting; drive the resulting gaps to closure with evidence.
+  lead_role: "Purple Team Lead"
+  reports_to: "Director, Security Operations"
+  dotted_line_to: "White Exercise Director (exercise conduct only, not performance management)"
+  must_not_report_to:
+    - "Engineering leadership of systems under test"
+    - "Any business unit it tests"
+  dedicated_or_virtual:
+    P1: "virtual — 0.5 FTE"
+    P2: "dedicated — 1.0 FTE coordinator"
+    P3: "dedicated — 2.0+ FTE"
+
+files:
+  charter: CHARTER.md
+  playbook: PLAYBOOK.md
+  artifacts: ARTIFACTS.md
+  ai_agent: AI_AGENT.md
+  changelog: CHANGELOG.md
+
+owns:
+  workflow_stages: [2, 6, 8, 9, 12, 17]          # see 00-shared/03_end_to_end_workflow.md
+  contributes_to_stages: [1, 4, 10, 16]
+  gates_enforced:
+    - "G4 — no evidence, no finding"
+    - "G6 — verbatim retest, or record why the original is no longer possible"
+    - "No action outside the approved test-case set"
+  artifacts: [A1, A2, A3, A5, A6, A7, A9, A13]
+  metrics: [M-1, M-2, M-3, M-4, M-8, M-9, M-12, M-13]
+  headline_metrics:
+    - "M-12 intake:closure ratio — >1.0 sustained means SLOW DOWN testing"
+    - "M-13 regression conversion — the only compounding mechanism"
+
+authority:
+  decides:
+    - "Which scenario to propose"
+    - "Test case content and ATT&CK mapping"
+    - "Halting an in-flight test on technical grounds"
+    - "Initial finding severity"
+    - "Whether a finding is closed (on retest evidence)"
+  recommends:
+    - "Whether an exercise may proceed (White decides)"
+  denied:
+    - "Approving its own exercises"
+    - "Accepting risk"
+    - "Deploying production detection content"
+    - "Remediating or patching"
+    - "Expanding scope mid-exercise"
+    - "Production admin credentials"
+
+separation_of_duties:
+  - "SoD-1 — validates Green's detections; never authors production content"
+  - "SoD-8 — does not deploy detection content"
+  - "Uses per-RoE issued exercise identities, never operator accounts (SoD-9)"
+
+depends_on:
+  white: "Approved RoE before any test action"
+  green: "Detection catalog, telemetry inventory, telemetry health"
+  orange: "Threat models and abuse cases"
+  blue: "Six-stage outcomes 4-6; real incidents as scenario candidates"
+  yellow: "System expertise during tests; fix evidence for retest"
+  grc: "Risk register, crown-jewel inventory"
+
+provides_to:
+  green: "Detection gaps (A6), validated coverage"
+  yellow: "Findings with testable acceptance criteria (A5)"
+  white: "Exercise proposals, retest records, metrics"
+  blue: "Exercise notification via White; validated detection results"
+  orange: "What actually worked — feeds the attack-path catalog"
+
+integrations:
+  why_engine:
+    owns_triggers: [W-1, W-3]                    # retest closure; systemic lesson
+    recall_before: "R-3 — scenario selection"
+    commands:
+      - "why-engine search --repo-path . --query \"<finding title>\""
+      - "why-engine stats --repo-path .         # monthly, report clusters with M-9"
+      - "why-engine doctor --repo-path .        # weekly health check"
+    publish_target: outbox                       # NEVER api — see 00-shared/15 P-1
+    sensitivity_floor: internal
+  soul_system:
+    markers: ["SOUL-OUTCOME:", "SOUL-PAIN:"]
+    emits_on: ["retest verdict", "failed retest", "rollback that did not work"]
+    never_emit: ["CUI", "PII", "credentials", "evidence content", "blind-phase details"]
+  blue_team_config:
+    coverage_target: "../blue-team/config/coverage_target.json"
+    role: "single source of truth for the M-1 denominator; maintained jointly with Blue"
+
+staffing:
+  minimum: { P1: 0.5, P2: 1.0, P3: 2.0 }
+  mature:  { P1: 1.0, P2: 3.0, P3: 6.0 }
+
+adversarial_review:
+  status: completed_for_local_core_external_boundaries_held
+  owner: orange
+  question: "How would an adversary make this validation function report success it did not earn?"
+  evidence: "docs/ADVERSARIAL_REVIEW.md"
+
+bootstrap:
+  - "Read CHARTER.md, then PLAYBOOK.md"
+  - "Confirm Open Decisions O-6 (Red capability) and O-11 (primary risks) are closed"
+  - "Load the prioritized technique list from ../blue-team/config/coverage_target.json"
+  - "Confirm an approved RoE exists before ANY test action — no exceptions"
+  - "Run: why-engine doctor --repo-path . (must exit 0)"
+  - "Check M-12 intake:closure before scheduling another exercise"
+
+blind_phase_rule: >
+  Collaborative by default. A blind phase is a WHITE-AUTHORIZED TEST MODE requiring a signed
+  objective, named blinded participants, enumerated withheld information, a bounded window, a
+  declassification trigger, named safety observers, and live deconfliction. It EXPIRES
+  AUTOMATICALLY at 'end' and must not continue merely because nobody ended it. Extension
+  requires a new signature. Schema: 00-shared/04_rules_of_engagement_template.md sec 5.10.1

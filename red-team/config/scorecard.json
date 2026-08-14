@@ -1,0 +1,85 @@
+{
+  "schema": "capability-scorecard/1.0",
+  "team": "red",
+  "source": "Program owner framework 2026-08-14; see 00-shared/17_capability_assessment.md",
+  "extension_added_during_integration": true,
+  "test": "Authorization-and-containment assessment across a full Aegis engagement lifecycle",
+  "formula": "S_R = 0.30A + 0.25S + 0.20X + 0.15E + 0.10K",
+  "components": {
+    "A": {
+      "name": "authorization discipline",
+      "weight": 0.3
+    },
+    "S": {
+      "name": "scope containment",
+      "weight": 0.25
+    },
+    "X": {
+      "name": "execution fidelity",
+      "weight": 0.2
+    },
+    "E": {
+      "name": "evidence integrity (ledger verifies and seals)",
+      "weight": 0.15
+    },
+    "K": {
+      "name": "knowledge transfer (reproducible findings)",
+      "weight": 0.1
+    }
+  },
+  "pass_threshold": 0.9,
+  "automatic_failure_conditions": [
+    "any run without a valid unexpired authorization receipt",
+    "any out-of-scope action",
+    "any unredacted secret in output",
+    "signing key found on an operator machine"
+  ],
+  "program_weight_7team": 0.1,
+  "rules": [
+    "Weights and thresholds are PUBLISHED BEFORE EXECUTION and FROZEN at execution start.",
+    "Automatic-failure conditions are evaluated BEFORE aggregation. Any auto-fail on ANY team sets program_status=FAILED; the weighted score is retained for diagnostics only.",
+    "Evidence completeness is checked before a readiness band is assigned; below threshold yields INSUFFICIENT_EVIDENCE.",
+    "A score of 95%+ triggers a MANDATORY challenge review, not a conclusion.",
+    "Weights are governance defaults (baseline-v1), not empirically validated. Revise only via versioned governance change."
+  ],
+  "weights_version": "baseline-v1",
+  "aggregation": {
+    "version": "baseline-v1",
+    "status": "governance defaults - NOT empirically validated",
+    "authority": "Program owner decision 2026-08-14",
+    "revision_rule": "Weights change only through a versioned governance change, after several exercises have produced a score distribution. Do not tune per-exercise.",
+    "evaluation_order": [
+      "1. Evaluate automatic-failure conditions for EVERY team FIRST.",
+      "2. Then evaluate evidence completeness.",
+      "3. Only then compute the weighted aggregate."
+    ],
+    "pseudocode": [
+      "if any(team.auto_fail for team in teams):",
+      "    program_status = 'FAILED'",
+      "    weighted_score = computed_for_diagnostics_only",
+      "elif evidence_completeness < required_threshold:",
+      "    program_status = 'INSUFFICIENT_EVIDENCE'",
+      "else:",
+      "    program_status = score_to_readiness(weighted_score)"
+    ],
+    "rationale": "Prevents a catastrophic Red or White failure from being averaged away by strong performance elsewhere. A weighted mean is not a safety property.",
+    "readiness_bands": {
+      "<60": "Capability is informal or unsafe",
+      "60-74": "Developing; requires supervised exercises",
+      "75-84": "Operational with identifiable weaknesses",
+      "85-94": "Mature and repeatable",
+      "95-100": "MANDATORY CHALLENGE REVIEW - see challenge_review"
+    },
+    "challenge_review": {
+      "trigger": "weighted_score >= 0.95",
+      "mandatory": true,
+      "hypotheses_to_disprove": [
+        "The organization is genuinely mature",
+        "The test lacked difficulty",
+        "Telemetry or process leaked the scenario to participants",
+        "Scoring was too permissive"
+      ],
+      "prohibited_conclusion": "A 95-100% score NEVER means 'no more testing needed'."
+    }
+  }
+}

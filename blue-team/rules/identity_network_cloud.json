@@ -1,0 +1,168 @@
+[
+  {
+    "id": "BT-IDENTITY-001",
+    "title": "Repeated authentication failures",
+    "severity": "high",
+    "enabled": true,
+    "suppression_seconds": 600,
+    "conditions": [{"field": "event_type", "operator": "eq", "value": "authentication_failed"}],
+    "threshold": {"count": 8, "within_seconds": 300, "group_by": ["host", "user"]},
+    "techniques": ["T1110"],
+    "tactics": ["Credential Access"],
+    "rationale": "Repeated failures for one identity and host may represent password guessing or spray follow-up."
+  },
+  {
+    "id": "BT-IDENTITY-002",
+    "title": "Privileged group membership changed",
+    "severity": "high",
+    "enabled": true,
+    "suppression_seconds": 0,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "group_membership_added"},
+      {"field": "attributes.privileged", "operator": "eq", "value": true}
+    ],
+    "techniques": ["T1098"],
+    "tactics": ["Persistence", "Privilege Escalation"],
+    "rationale": "Every privileged membership change requires change-ticket and actor validation."
+  },
+  {
+    "id": "BT-IDENTITY-003",
+    "title": "Multi-factor authentication disabled",
+    "severity": "critical",
+    "enabled": true,
+    "allow_suppression": false,
+    "suppression_seconds": 0,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "mfa_changed"},
+      {"field": "attributes.state", "operator": "eq", "value": "disabled"}
+    ],
+    "techniques": ["T1556.006"],
+    "tactics": ["Credential Access", "Defense Impairment"],
+    "rationale": "MFA disablement removes a primary identity control and demands immediate owner verification."
+  },
+  {
+    "id": "BT-IDENTITY-004",
+    "title": "High-risk or impossible-travel sign-in",
+    "severity": "high",
+    "enabled": true,
+    "suppression_seconds": 900,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "identity_risk"},
+      {"field": "attributes.risk", "operator": "in", "value": ["high", "critical"]}
+    ],
+    "techniques": ["T1078"],
+    "tactics": ["Initial Access", "Persistence", "Privilege Escalation", "Stealth"],
+    "rationale": "Provider high-risk identity signals must be correlated with endpoint and session telemetry."
+  },
+  {
+    "id": "BT-NETWORK-001",
+    "title": "Rare-domain DNS beacon pattern",
+    "severity": "high",
+    "enabled": true,
+    "suppression_seconds": 900,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "dns_query"},
+      {"field": "attributes.rare_domain", "operator": "eq", "value": true},
+      {"field": "attributes.periodic", "operator": "eq", "value": true}
+    ],
+    "threshold": {"count": 12, "within_seconds": 300, "group_by": ["host", "attributes.query"]},
+    "techniques": ["T1071.004"],
+    "tactics": ["Command and Control"],
+    "rationale": "Repeated periodic queries to a rare domain can indicate DNS-based command and control."
+  },
+  {
+    "id": "BT-NETWORK-002",
+    "title": "Large untrusted outbound transfer",
+    "severity": "high",
+    "enabled": true,
+    "suppression_seconds": 600,
+    "group_by": ["host", "user", "attributes.destination"],
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "network_transfer"},
+      {"field": "attributes.direction", "operator": "eq", "value": "outbound"},
+      {"field": "attributes.destination_trusted", "operator": "eq", "value": false},
+      {"field": "attributes.destination", "operator": "exists", "value": true},
+      {"field": "attributes.bytes", "operator": "gte", "value": 104857600}
+    ],
+    "techniques": ["T1041"],
+    "tactics": ["Exfiltration"],
+    "rationale": "Large transfers to an untrusted destination require business-purpose validation and DLP review."
+  },
+  {
+    "id": "BT-NETWORK-003",
+    "title": "Remote service lateral movement",
+    "severity": "high",
+    "enabled": true,
+    "suppression_seconds": 300,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "remote_service_execution"},
+      {"field": "attributes.approved_admin_activity", "operator": "eq", "value": false}
+    ],
+    "techniques": ["T1021"],
+    "tactics": ["Lateral Movement"],
+    "rationale": "Unapproved remote service execution is a direct lateral-movement indicator."
+  },
+  {
+    "id": "BT-EMAIL-001",
+    "title": "Malicious-link interaction",
+    "severity": "high",
+    "enabled": true,
+    "suppression_seconds": 300,
+    "group_by": ["user", "attributes.url"],
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "mail_link_clicked"},
+      {"field": "attributes.url", "operator": "exists", "value": true},
+      {"field": "attributes.verdict", "operator": "eq", "value": "malicious"}
+    ],
+    "techniques": ["T1566.002"],
+    "tactics": ["Initial Access"],
+    "rationale": "A user interaction with a malicious link starts identity, endpoint, and session investigation."
+  },
+  {
+    "id": "BT-CLOUD-001",
+    "title": "Cloud audit configuration weakened",
+    "severity": "critical",
+    "enabled": true,
+    "allow_suppression": false,
+    "suppression_seconds": 0,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "cloud_audit_changed"},
+      {"field": "attributes.logging_reduced", "operator": "eq", "value": true}
+    ],
+    "techniques": ["T1562.008"],
+    "tactics": ["Defense Impairment"],
+    "rationale": "Cloud audit reduction is a critical loss of visibility and may precede destructive actions."
+  },
+  {
+    "id": "BT-EDGE-001",
+    "title": "High-density inbound service scan",
+    "severity": "medium",
+    "enabled": true,
+    "suppression_seconds": 1800,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "inbound_scan"},
+      {"field": "attributes.unique_ports", "operator": "gte", "value": 20},
+      {"field": "attributes.authorized_scanner", "operator": "eq", "value": false}
+    ],
+    "techniques": ["T1595"],
+    "tactics": ["Reconnaissance"],
+    "rationale": "Unauthorized high-density scanning against exposed services is a reconnaissance signal for edge review."
+  },
+  {
+    "id": "BT-THREATINTEL-001",
+    "title": "New adversary infrastructure targeting the organization",
+    "severity": "medium",
+    "enabled": true,
+    "suppression_seconds": 3600,
+    "group_by": ["attributes.indicator"],
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "threat_intel_match"},
+      {"field": "attributes.indicator", "operator": "exists", "value": true},
+      {"field": "attributes.targeting_organization", "operator": "eq", "value": true},
+      {"field": "attributes.infrastructure_confidence", "operator": "in", "value": ["high", "confirmed"]}
+    ],
+    "techniques": ["T1583"],
+    "tactics": ["Resource Development"],
+    "rationale": "High-confidence newly observed adversary infrastructure targeting the organization drives preventive hunting."
+  }
+]

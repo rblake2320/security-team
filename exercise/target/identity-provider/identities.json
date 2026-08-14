@@ -1,0 +1,4 @@
+[
+  {"identity_id": "user-alpha", "project_id": "PROJECT-ALPHA", "credential_class": "SYNTHETIC"},
+  {"identity_id": "user-bravo", "project_id": "PROJECT-BRAVO", "credential_class": "SYNTHETIC"}
+]

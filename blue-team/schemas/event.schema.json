@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.invalid/sentinel-blue/event.schema.json",
+  "title": "Sentinel Blue Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "timestamp", "source", "event_type", "host"],
+  "properties": {
+    "event_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "timestamp": {"type": "string", "format": "date-time"},
+    "source": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "event_type": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "host": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "user": {"type": ["string", "null"], "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "severity": {"type": "integer", "minimum": 0, "maximum": 10},
+    "attributes": {"type": "object", "maxProperties": 256}
+  }
+}

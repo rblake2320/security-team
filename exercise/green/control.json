@@ -1,0 +1,1 @@
+{"control_id":"CTRL-DB-PROJECT-SCOPE-001","requirement":"Every record read is project-scoped and every cross-project attempt is logged","rollback":"Restore disposable model configuration","rollback_tested":true}

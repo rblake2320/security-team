@@ -1,0 +1,9 @@
+{"event_id":"evt-001","timestamp":"2026-08-13T20:00:00Z","source":"identity","event_type":"authentication_failed","host":"workstation-1","user":"alex","severity":3,"attributes":{"ip":"203.0.113.10"}}
+{"event_id":"evt-002","timestamp":"2026-08-13T20:00:10Z","source":"identity","event_type":"authentication_failed","host":"workstation-1","user":"alex","severity":3,"attributes":{"ip":"203.0.113.10"}}
+{"event_id":"evt-003","timestamp":"2026-08-13T20:00:20Z","source":"identity","event_type":"authentication_failed","host":"workstation-1","user":"alex","severity":3,"attributes":{"ip":"203.0.113.10"}}
+{"event_id":"evt-004","timestamp":"2026-08-13T20:00:30Z","source":"identity","event_type":"authentication_failed","host":"workstation-1","user":"alex","severity":3,"attributes":{"ip":"203.0.113.10"}}
+{"event_id":"evt-005","timestamp":"2026-08-13T20:00:40Z","source":"identity","event_type":"authentication_failed","host":"workstation-1","user":"alex","severity":3,"attributes":{"ip":"203.0.113.10"}}
+{"event_id":"evt-006","timestamp":"2026-08-13T20:00:50Z","source":"identity","event_type":"authentication_failed","host":"workstation-1","user":"alex","severity":3,"attributes":{"ip":"203.0.113.10"}}
+{"event_id":"evt-007","timestamp":"2026-08-13T20:01:00Z","source":"identity","event_type":"authentication_failed","host":"workstation-1","user":"alex","severity":3,"attributes":{"ip":"203.0.113.10"}}
+{"event_id":"evt-008","timestamp":"2026-08-13T20:01:10Z","source":"identity","event_type":"authentication_failed","host":"workstation-1","user":"alex","severity":3,"attributes":{"ip":"203.0.113.10"}}
+{"event_id":"evt-009","timestamp":"2026-08-13T20:02:00Z","source":"edr","event_type":"security_control_changed","host":"workstation-1","user":"alex","severity":10,"attributes":{"control":"endpoint_protection","state":"disabled"}}

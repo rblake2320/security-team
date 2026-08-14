@@ -1,0 +1,124 @@
+# .init — machine-readable team manifest (YAML)
+# Read this to bootstrap as, or route work to, the Green Team.
+# Authoritative prose lives in CHARTER.md; this file must not contradict it.
+init_version: "1.0"
+schema_owner: "00-shared/02_org_structure_and_raci.md"
+
+team:
+  id: green
+  name: "Green Team"
+  color: "#22c55e"
+  folder: green-team
+  function: "Defensive security engineering integrated with the builders (Blue + Yellow)"
+  mission: >
+    Engineer defensibility into the platform — telemetry, hardened configuration,
+    identity controls, segmentation, endpoint and cloud protections, logging,
+    alerting, response automation, backup and recovery — so systems are observable
+    and defensible BEFORE production.
+  lead_role: "Green Team Lead"
+  reports_to: "Director, Security Engineering"
+  dotted_line_to: "Head of Platform Engineering"
+  must_not_report_to:
+    - "Purple Lead   # Purple validates what Green builds"
+  dedicated_or_virtual:
+    P1: "virtual guild — 0.5 FTE"
+    P2: "virtual guild — 1.5-2.0 FTE"
+    P3: "dedicated — 4.0-6.0 FTE"
+
+files:
+  charter: CHARTER.md
+  playbook: PLAYBOOK.md
+  artifacts: ARTIFACTS.md
+  ai_agent: AI_AGENT.md
+  changelog: CHANGELOG.md
+
+owns:
+  workflow_stages: [11, 17]
+  contributes_to_stages: [5, 7, 9, 12]
+  gates_enforced:
+    - "DEFENSIBILITY GATE — blocking authority for production release"
+    - "New detection content must be observed to fire in non-prod before deployment"
+  artifacts:
+    - "Detection content (as code)"
+    - "Detection catalog + ATT&CK mapping"
+    - "Telemetry / log source inventory + health"
+    - "Hardening baselines + drift reports"
+    - "Paved-road catalog"
+    - "Defensibility gate records"
+    - "SOAR playbooks"
+    - "Restore drill records"
+  metrics: [M-3, M-10, M-11]
+  headline_metrics:
+    - "M-10 telemetry availability — THE FOUNDATION. Every detection metric is conditional on it."
+
+authority:
+  decides:
+    - "Detection content design, thresholds, tuning"
+    - "Log sources to onboard and retention tiers (Data Owner concurs)"
+    - "Hardening baseline content (must meet the governing benchmark)"
+    - "Whether a system passes the defensibility gate — BLOCKING"
+    - "Emergency detection deployment during an incident (24h post-hoc change record)"
+  recommends:
+    - "Automated destructive response — requires System Owner approval + TWO approvers + rollback (conflict C-8)"
+  denied:
+    - "Validating its own detections against live emulation (Purple does — SoD-1)"
+    - "Approving exercises"
+    - "Accepting risk"
+    - "Running offensive tooling"
+
+separation_of_duties:
+  - "SoD-1 — may not be the sole party attesting a detection works"
+  - "Peer review required on all detection content before deploy"
+
+depends_on:
+  purple: "Detection gaps (A6), control gaps, validated coverage results"
+  orange: "Threat models — what to instrument for"
+  blue: "False positives, false negatives, consumer-side telemetry gaps"
+  yellow: "New service designs and deploy plans"
+  cti: "Behavior to detect"
+
+provides_to:
+  blue: "Deployed detection content, SOAR playbooks, runbooks"
+  purple: "Detection catalog, telemetry inventory for validation planning"
+  yellow: "Paved roads, hardened baselines, defensibility gate criteria"
+  grc: "Control implementation evidence, restore drill results"
+
+boundaries:
+  # Reconciled with Sentinel Blue — see 00-shared/14_blue_team_integration_review.md
+  C-1: "Green AUTHORS and DEPLOYS detection content. Blue provides operational feedback. One catalog."
+  C-3: "Green owns SCHEDULED restore drills. Blue owns INCIDENT-TIME recovery."
+  C-4: "Green owns the telemetry pipeline. Blue owns noticing it is broken."
+  C-8: "Adopt Blue's stricter rule — two approvers plus rollback for destructive automation."
+
+integrations:
+  why_engine:
+    obligation: "Supply whyNotCaught telemetry/detection detail"
+    recall_use: "Use recurring clusters to prioritize paved roads"
+    publish_target: outbox
+  soul_system:
+    markers: ["SOUL-PAIN:"]
+    emits_on: ["silent telemetry events", "detection deployed that did not fire"]
+    never_emit: ["raw event content", "CUI", "credentials"]
+  blue_team:
+    reference_rule_format: "../blue-team/rules/"
+    sensor_policy: "../blue-team/config/sensor_policy.json"
+    note: "Production detection content lives in GREEN's detection-as-code repo (residual R-3)"
+
+staffing:
+  minimum: { P1: 0.5, P2: 1.75, P3: 5.0 }
+  mature:  { P1: 1.0, P2: 4.0, P3: 12.0 }
+
+adversarial_review:
+  status: not_started
+  owner: orange
+  question: >
+    How would an adversary make the defense look healthy while it is blind?
+    (Silent log source, tuned-out detection, a gate that is always waived.)
+
+bootstrap:
+  - "Run the telemetry inventory FIRST — you cannot build detection on data you do not have"
+  - "Stand up detection-as-code in Git with CI validation before writing new content"
+  - "Define the defensibility gate; run it ADVISORY on one release before making it blocking"
+  - "Set telemetry health alerting: silent source > 2x normal max gap = page"
+  - "Schedule the first restore drill — backup success reports are NOT recovery evidence"
+  - "Build P1 (high-fidelity, low-volume) detections first"

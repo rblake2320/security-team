@@ -1,0 +1,119 @@
+# .init — machine-readable team manifest (YAML)
+# Read this to bootstrap as, or route work to, the Yellow Team.
+# Authoritative prose lives in CHARTER.md; this file must not contradict it.
+init_version: "1.0"
+schema_owner: "00-shared/02_org_structure_and_raci.md"
+
+team:
+  id: yellow
+  name: "Yellow Team"
+  color: "#eab308"
+  folder: yellow-team
+  function: "Secure software, platform, infrastructure, and AI-system builders"
+  mission: >
+    Build and operate systems that are secure by design, and convert security
+    findings into completed engineering work with verifiable acceptance criteria
+    and evidence.
+  lead_role: "Head of Engineering + AppSec Lead"
+  reports_to: "VP Engineering   # NOT security"
+  structural_rule: >
+    NEVER create a separate 'Yellow Team' org box. Yellow IS the existing builder
+    population operating under secure-by-design requirements, with Security
+    Champions as the named per-team interface.
+  dedicated_or_virtual:
+    P1: "virtual — existing engineers + 2-3 Security Champions at 4 h/month"
+    P2: "virtual — 1.0 FTE AppSec + 1 champion per delivery team"
+    P3: "virtual — 2.0-4.0 FTE AppSec/DevSecOps + champions across all teams"
+
+files:
+  charter: CHARTER.md
+  playbook: PLAYBOOK.md
+  artifacts: ARTIFACTS.md
+  ai_agent: AI_AGENT.md
+  changelog: CHANGELOG.md
+
+owns:
+  workflow_stages: [5, 11]
+  contributes_to_stages: [12, 16]
+  gates_enforced:
+    - "Reject findings whose acceptance criteria are not testable (protects G5)"
+    - "Fix evidence package required before retest"
+  artifacts: [A8, "Threat Model", "Fix Evidence Package", "SBOM", "Regression test", "ADR", "Deviation request"]
+  metrics: [M-7, M-9, M-13, M-14]
+  headline_metrics:
+    - "M-9 recurrence — rising means you are fixing instances, not causes; ask Green for a paved road"
+
+authority:
+  decides:
+    - "Implementation approach for a fix (must meet acceptance criteria)"
+    - "Sprint sequencing within the severity SLA"
+    - "Architecture changes (with Orange review above threshold)"
+  recommends:
+    - "Whether a fix meets acceptance criteria — Purple/Green verify"
+    - "Deviating from a paved road — System Owner accepts the risk"
+  denied:
+    - "Deciding finding severity"
+    - "Self-certifying closure"
+    - "Running offensive tooling against other teams' systems"
+    - "Accepting risk as engineers (only the System/Business Owner may)"
+    - "Deferring a finding past SLA without signed risk acceptance"
+
+separation_of_duties:
+  - "SoD-3 — the fix author may not be the sole verifier"
+  - "SoD-6 — engineers never sign risk acceptance"
+
+depends_on:
+  green: "Paved roads, secure-by-design requirements, defensibility gate"
+  orange: "Threat models, abuse cases, design review, regression test co-authorship"
+  purple: "Findings with testable acceptance criteria"
+  system_owners: "Prioritization and funding; risk acceptance signature"
+
+provides_to:
+  purple: "Fix evidence for retest"
+  green: "Telemetry emitted by new features; deviation requests"
+  orange: "Designs, ADRs, API specs for review"
+  grc: "SBOMs, provenance, control implementation evidence"
+
+integrations:
+  why_engine:
+    recall_before: "R-1 — BEFORE starting remediation on any finding"
+    obligation: "Supply whyFixWorked evidence via the fix evidence package"
+    commands:
+      - "why-engine search --repo-path . --query \"<finding title or error>\""
+    publish_target: outbox
+    sensitivity_floor: internal
+  soul_system:
+    markers: ["SOUL-LEARNING:"]
+    emits_on: ["systemic engineering lessons"]
+    never_emit: ["secrets", "customer data", "CUI"]
+
+sdlc_gates:
+  idea:        "Threat model required for above-threshold systems"
+  design:      "Orange design review; abuse cases become acceptance criteria"
+  build:       "Paved road used or deviation raised; no secrets in code/IaC/images/logs/prompts"
+  pr:          "SAST + SCA + secret scan must pass; security checklist in review"
+  pre_merge:   "IaC policy-as-code passes; regression tests pass"
+  pre_release: "GREEN DEFENSIBILITY GATE — blocking"
+  release:     "SBOM generated and stored; provenance attested"
+  post:        "Telemetry confirmed flowing as designed"
+
+staffing:
+  minimum: { P1: 0.1, P2: 1.25, P3: 4.0 }
+  mature:  { P1: 0.5, P2: 3.0, P3: 10.0 }
+  champion_program:
+    ratio: "1 per delivery team"
+    protected_time_hours_per_month: 4
+    note: "Highest-leverage Yellow investment. If managers do not defend the time, the program is nominal."
+
+adversarial_review:
+  status: not_started
+  owner: orange
+  question: "How would an adversary get malicious change through this SDLC and have it look routine?"
+
+bootstrap:
+  - "Read CHARTER.md — note that Yellow is engineering, not a new org box"
+  - "Name Security Champions and confirm protected time with their managers"
+  - "Confirm the severity SLAs are ACHIEVABLE and say so now if not (assumption A-2)"
+  - "Route findings into the NORMAL backlog — never a separate security tracker"
+  - "Call why-engine recall before starting any remediation (R-1)"
+  - "Reject any finding whose acceptance criteria are not testable"

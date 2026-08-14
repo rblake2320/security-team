@@ -1,0 +1,24 @@
+[
+  {"technique": "T1562.001", "name": "Impair Defenses: Disable or Modify Tools", "priority": "critical", "required_telemetry": ["edr", "windows-security"]},
+  {"technique": "T1070.001", "name": "Clear Windows Event Logs", "priority": "critical", "required_telemetry": ["windows-security", "edr"]},
+  {"technique": "T1059.001", "name": "PowerShell", "priority": "high", "required_telemetry": ["sysmon", "edr"]},
+  {"technique": "T1003.001", "name": "LSASS Memory", "priority": "critical", "required_telemetry": ["sysmon", "edr"]},
+  {"technique": "T1543.003", "name": "Windows Service", "priority": "high", "required_telemetry": ["windows-security", "sysmon"]},
+  {"technique": "T1053.005", "name": "Scheduled Task", "priority": "high", "required_telemetry": ["windows-security", "sysmon"]},
+  {"technique": "T1486", "name": "Data Encrypted for Impact", "priority": "critical", "required_telemetry": ["edr", "backup"]},
+  {"technique": "T1204.002", "name": "Malicious File", "priority": "high", "required_telemetry": ["sysmon", "email-security"]},
+  {"technique": "T1110", "name": "Brute Force", "priority": "high", "required_telemetry": ["identity", "windows-security"]},
+  {"technique": "T1098", "name": "Account Manipulation", "priority": "critical", "required_telemetry": ["identity", "cloud-audit"]},
+  {"technique": "T1556.006", "name": "Multi-Factor Authentication", "priority": "critical", "required_telemetry": ["identity"]},
+  {"technique": "T1078", "name": "Valid Accounts", "priority": "high", "required_telemetry": ["identity", "edr"]},
+  {"technique": "T1071.004", "name": "DNS", "priority": "high", "required_telemetry": ["dns", "firewall"]},
+  {"technique": "T1041", "name": "Exfiltration Over C2 Channel", "priority": "critical", "required_telemetry": ["firewall", "edr"]},
+  {"technique": "T1021", "name": "Remote Services", "priority": "high", "required_telemetry": ["windows-security", "edr"]},
+  {"technique": "T1566.002", "name": "Spearphishing Link", "priority": "high", "required_telemetry": ["email-security", "identity"]},
+  {"technique": "T1562.008", "name": "Disable or Modify Cloud Logs", "priority": "critical", "required_telemetry": ["cloud-audit"]},
+  {"technique": "T1490", "name": "Inhibit System Recovery", "priority": "critical", "required_telemetry": ["edr", "backup"]}
+  ,{"technique": "T1087", "name": "Account Discovery", "priority": "high", "required_telemetry": ["sysmon", "edr"]}
+  ,{"technique": "T1560.001", "name": "Archive Collected Data", "priority": "high", "required_telemetry": ["edr", "data-security"]}
+  ,{"technique": "T1595", "name": "Active Scanning", "priority": "standard", "required_telemetry": ["firewall", "internet-scan"]}
+  ,{"technique": "T1583", "name": "Acquire Infrastructure", "priority": "standard", "required_telemetry": ["threat-intelligence"]}
+]

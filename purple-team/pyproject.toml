@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aegis-purple-team"
+version = "0.1.0"
+description = "Fail-closed purple-team exercise and assurance orchestration"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "LicenseRef-Proprietary"
+authors = [{name = "PKA Testing"}]
+dependencies = ["cryptography==50.0.0"]
+
+[project.scripts]
+aegis-purple = "aegis_purple.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

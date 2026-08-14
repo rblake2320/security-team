@@ -1,0 +1,72 @@
+{
+  "schema": "exercise.safety-boundaries/1.0",
+  "rule": "Every boundary is a SEPARATE refusal so the reason is unambiguous. Enforced by preflight.py before any exercise action.",
+  "boundaries": [
+    {
+      "id": "SB-01",
+      "boundary": "Disposable range / isolated lab / explicitly authorized non-production environment",
+      "authorization_field": "environment_class",
+      "required_value": "non_production_disposable"
+    },
+    {
+      "id": "SB-02",
+      "boundary": "Exact scope in the signed RoE: addresses, repos, accounts, techniques, window",
+      "authorization_field": "allowed_test_ids",
+      "required_value": "__non_empty__"
+    },
+    {
+      "id": "SB-03",
+      "boundary": "Synthetic credentials and data only",
+      "authorization_field": "synthetic_data_only",
+      "required_value": true
+    },
+    {
+      "id": "SB-04",
+      "boundary": "Network egress blocked by default",
+      "authorization_field": "network_egress",
+      "required_value": "blocked"
+    },
+    {
+      "id": "SB-05",
+      "boundary": "No uncontrolled persistence, propagation, destruction, or real credential collection",
+      "authorization_field": "destructive_actions_permitted",
+      "required_value": false
+    },
+    {
+      "id": "SB-06",
+      "boundary": "Resource and rate limits",
+      "authorization_field": "rate_limited",
+      "required_value": true
+    },
+    {
+      "id": "SB-07",
+      "boundary": "Snapshots and tested rollback",
+      "authorization_field": "rollback_tested",
+      "required_value": true
+    },
+    {
+      "id": "SB-08",
+      "boundary": "White-controlled emergency stop",
+      "authorization_field": "emergency_stop",
+      "required_value": "white_controlled"
+    },
+    {
+      "id": "SB-09",
+      "boundary": "Real-incident deconfliction procedure",
+      "authorization_field": "deconfliction_procedure",
+      "required_value": "__non_empty__"
+    },
+    {
+      "id": "SB-10",
+      "boundary": "Append-only evidence capture",
+      "authorization_field": "evidence_capture",
+      "required_value": "append_only"
+    },
+    {
+      "id": "SB-11",
+      "boundary": "Automatic refusal when authorization is missing, invalid, expired, revoked, or out of scope",
+      "authorization_field": "authorization_refusal_enforced",
+      "required_value": true
+    }
+  ]
+}

@@ -1,0 +1,132 @@
+# .init — machine-readable team manifest (YAML)
+# Read this to bootstrap as, or route work to, the Orange Team.
+# Authoritative prose lives in CHARTER.md; this file must not contradict it.
+init_version: "1.0"
+schema_owner: "00-shared/02_org_structure_and_raci.md"
+
+team:
+  id: orange
+  name: "Orange Team"
+  color: "#f97316"
+  folder: orange-team
+  function: "Offensive security expertise integrated with the builders (Red + Yellow)"
+  mission: >
+    Apply adversarial thinking at design and build time so attack paths are removed
+    on a whiteboard instead of discovered in production, and teach builders to
+    recognize how their own decisions become exploitable.
+  lead_role: "Orange Lead / Principal Offensive Engineer"
+  reports_to: "CISO   # embedded with Engineering (alternative: Engineering with dotted line to CISO — pick one explicitly)"
+  must_not_report_to:
+    - "Any single delivery team whose designs it reviews"
+  dedicated_or_virtual:
+    P1: "virtual — 0.25 FTE, contracted or borrowed"
+    P2: "virtual — 0.5-1.0 FTE embedded"
+    P3: "dedicated — 2.0-3.0 FTE"
+
+files:
+  charter: CHARTER.md
+  playbook: PLAYBOOK.md
+  artifacts: ARTIFACTS.md
+  ai_agent: AI_AGENT.md
+  changelog: CHANGELOG.md
+
+hard_boundary:
+  # This is the constraint that makes an offensive person safe to embed with builders.
+  environments_permitted: [design_documents, lab, pre_production]
+  environments_denied: [production]
+  production_exception: >
+    Only with White + System Owner authorization under an RoE, and even then
+    OBSERVATION/VALIDATION ONLY — never exploitation.
+  absolutely_prohibited:
+    - "Covert persistence"
+    - "Destructive payloads"
+    - "Credential theft against real identities"
+    - "Uncontrolled exploitation"
+    - "Evasion tooling outside an authorized lab"
+    - "Exploiting a discovered production issue to prove the point (SoD-7 — report to CSIRT instead)"
+
+owns:
+  workflow_stages: [5]
+  contributes_to_stages: [6, 7, 11, 16]
+  gates_enforced:
+    - "Threat model produced WITH engineers, never FOR them"
+    - "Regression tests are safe checks, never exploits"
+  artifacts:
+    - "Threat Model (co-owned with Yellow)"
+    - "Abuse / Misuse Case Library"
+    - "Attack-Path Analysis   # CONFIDENTIAL"
+    - "Attack-Surface Inventory"
+    - "Design Review Record"
+    - "Pre-Production Validation Report"
+    - "Safe Regression Test suite"
+    - "Internal Attack-Path Catalog   # CONFIDENTIAL"
+  metrics: [M-14]
+  headline_metrics:
+    - "shift-left ratio — issues found by Orange at design ÷ issues found by Purple later. Rising is good."
+    - "% of Purple findings tracing to a previously-flagged Orange recommendation — LOW is good"
+
+authority:
+  decides:
+    - "Threat model content and completeness"
+    - "Abuse cases that become required test cases"
+    - "Lab / pre-prod activity within an approved envelope"
+  recommends:
+    - "That a design has an unacceptable attack path — escalates to System Owner risk acceptance"
+  denied:
+    - "Any production activity without White + System Owner"
+    - "Blocking releases directly (Green's gate blocks; the System Owner accepts risk)"
+    - "Approving its own scope"
+    - "Accepting risk"
+    - "Performing the independent penetration test used as compliance evidence (conflict F-1 — Orange is not independent by design)"
+
+separation_of_duties:
+  - "SoD-7 — may not both discover and exploit a production-exploitable issue"
+  - "Orange evidence is SUPPORTING, never independent assessment"
+
+depends_on:
+  yellow: "Architecture designs, ADRs, API specs, source code"
+  purple: "Findings — what actually worked"
+  green: "Paved-road patterns and their assumptions"
+  cti: "Real-world attack patterns"
+
+provides_to:
+  yellow: "Threat models, abuse cases as requirements, regression tests, education"
+  green: "Instrumentation requirements — 'to detect path X we need source S'"
+  purple: "Abuse-case-derived test cases, adversary knowledge for scenario design"
+  white: "Threat models and pre-prod validation reports"
+  all_teams: "Adversarial review of each team's own function (see adversarial_review below)"
+
+integrations:
+  why_engine:
+    owns_field: "generalizablePattern quality — the field that makes a case reusable"
+    recall_before: "R-4 — before a design review"
+    publish_target: outbox
+    sensitivity_floor: internal
+    note: "Attack-path material is CONFIDENTIAL — never promoted, never public (P-2/P-3)"
+  soul_system:
+    markers: ["SOUL-LEARNING:"]
+    emits_on: ["design patterns that became attack paths"]
+    never_emit: ["attack-path detail", "system identifiers", "CUI"]
+
+staffing:
+  minimum: { P1: 0.25, P2: 0.75, P3: 2.0 }
+  mature:  { P1: 0.5, P2: 2.0, P3: 5.0 }
+  hiring_gate: >
+    Teaching and non-condescending communication is a HIRING GATE, not a
+    nice-to-have. An offensive engineer developers avoid produces zero shift-left
+    value regardless of technical skill. Ask candidates to run a live threat model
+    on a sample architecture during the interview.
+
+adversarial_review:
+  status: not_started
+  owner: orange                                   # Orange owns producing these for ALL teams
+  queue: [white, green, purple, blue, yellow, orange]
+  priority_rationale: "White first — defeat authorization and every other control becomes negotiable"
+
+bootstrap:
+  - "Read CHARTER.md, especially the non-responsibilities section — twice"
+  - "Confirm the environment authorization envelope in writing before any lab activity"
+  - "Inventory and get approval for all offensive tooling; lab-restricted"
+  - "Get invited BEFORE architecture freeze — if you are invited after, fix the process gate"
+  - "Start with threat models for the top 3 systems, produced WITH the teams"
+  - "Never use a team's mistake as a teaching example without their consent and presence"

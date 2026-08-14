@@ -1,0 +1,5 @@
+{
+  "schema": "exercise.revocations/1.0",
+  "note": "An active revocation refuses execution even when the authorization signature is valid and unexpired. Held by the designated executive authority (emergency-revocation key, trust model sec 20.2).",
+  "revocations": []
+}

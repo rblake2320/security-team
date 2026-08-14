@@ -1,0 +1,12 @@
+{
+  "schema": "exercise.trust-store/1.0",
+  "environment": "PRODUCTION",
+  "note": "Public keys only. EMPTY until White/CISO, Internal Audit, and the Executive Sponsor enrol real keys through the custody process. A signature proves a private key signed bytes; identity comes from THIS registry.",
+  "required_roles": [
+    "white_ciso",
+    "internal_audit",
+    "executive_sponsor",
+    "clearance_issuer"
+  ],
+  "enrolled": []
+}

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "aegis.opening-material-vault.v1",
+  "title": "Opening-material vault (controlled)",
+  "description": "Custody record for commitment opening material. SUPERSEDES the earlier 'salt registry' guidance, which was wrong: centralizing all unrevealed salts in an ordinary registry creates a high-value disclosure point, and opening salts preserve hiding only while secret.",
+  "authority": "Program owner correction, 2026-08-14.",
+
+  "SUPERSEDES": {
+    "guidance": "'Maintain a salt registry so verification step 11 is answerable.'",
+    "defect": "Implied a broadly accessible list of unrevealed salts. Disclosure of that list would destroy hiding for every open commitment simultaneously - a single point of total failure for the mechanism it was meant to support.",
+    "correction": "Uniqueness is checked INSIDE the protected vault at creation. Unrevealed salts are never exposed for global duplicate checking. Disclosed salts move to a historical opening register only AFTER reveal."
+  },
+
+  "dual_property_requirement": {
+    "confidentiality_before_reveal": "Disclosure destroys hiding and voids the blind-inject design.",
+    "availability_at_reveal": "Loss makes the commitment permanently unopenable - indistinguishable from refusing to reveal.",
+    "rule": "Backup must protect BOTH. Solving only one breaks the commitment process in a different direction."
+  },
+
+  "type": "object",
+  "required": ["commitment_id", "opening_salt", "encrypted_package_location",
+               "package_digest", "created_at", "custodians", "backup_status", "recovery_test"],
+  "additionalProperties": false,
+  "properties": {
+    "commitment_id":              { "type": "string" },
+    "opening_salt":               { "type": "string", "description": "SECRET. Never leaves the vault before reveal." },
+    "encrypted_package_location": { "type": "string", "description": "Reference, not inline content." },
+    "package_digest":             { "type": "string", "description": "Internal verification digest, for vault-side integrity checking." },
+    "created_at":                 { "type": "string", "format": "date-time", "description": "TRUSTED time, not self-declared - see trust model sec 20.5a." },
+    "custodians":                 { "type": "array", "minItems": 2, "items": { "type": "string" }, "description": "Dual control. Minimum two." },
+    "backup_status":              { "enum": ["VERIFIED", "PENDING", "FAILED"] },
+    "recovery_test":              { "type": "string", "description": "Evidence id of the most recent successful recovery test." }
+  },
+
+  "operating_rules": [
+    "Check salt uniqueness INSIDE the protected vault at creation.",
+    "Publish disclosed salts into a historical opening register AFTER reveal.",
+    "Do NOT expose unrevealed salts merely to support global duplicate checking.",
+    "Treat reuse detection primarily as CSPRNG-HEALTH EVIDENCE. With correctly generated 256-bit or larger salts, accidental collision is extraordinarily unlikely; a collision indicates a broken generator, not an ordinary duplicate.",
+    "Encrypt backups under keys DISTINCT from the authorization, execution, evidence, and assessment keys.",
+    "Require dual control or threshold recovery for backup access.",
+    "Test recovery BEFORE the exercise, without prematurely exposing the actual opening material (recover to a sealed check, not to a readable copy).",
+    "Record backup loss or failed recovery as a READINESS REGRESSION.",
+    "Destroy opening secrets only after the retention policy permits, while PRESERVING the revealed package and the verification evidence."
+  ],
+
+  "verification_step_11_resolution": {
+    "question": "How is 'the opening_salt has not appeared in another commitment' answered without a global plaintext list?",
+    "answer": "The vault answers it at CREATION time, inside the protected boundary, before the salt is ever used. White does not need the list; White needs an attestation from the vault that the uniqueness check ran. After reveal, the salt is in the historical opening register and is checkable openly.",
+    "attestation_field": "Record the uniqueness-check result as evidence at commitment time; expose the result, never the corpus."
+  },
+
+  "regression_triggers": [
+    "backup_status becomes FAILED",
+    "recovery_test stale beyond policy",
+    "custodian count drops below 2",
+    "vault encryption key shared with any of the five program keys"
+  ]
+}

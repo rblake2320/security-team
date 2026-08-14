@@ -1,0 +1,944 @@
+{
+  "schema": "assurance-claim-registry/1.0",
+  "authority": "Program owner decision, 2026-08-14",
+  "spec": "00-shared/22_assurance_claims.md",
+  "basis": "NIST assurance-case practice: an auditable artifact linking claims, systematic arguments, explicit assumptions, and underlying evidence.",
+  "invariant": [
+    "CLAIM != CONTROL != MECHANISM != EVIDENCE",
+    "A control states the requirement.",
+    "A claim states the property believed to hold.",
+    "A mechanism attempts to create that property.",
+    "Evidence supports or falsifies the claim.",
+    "An assessment determines whether the evidence is sufficient."
+  ],
+  "lifecycle": {
+    "states": [
+      "PROPOSED",
+      "MECHANISM_IDENTIFIED",
+      "TESTABLE",
+      "EVIDENCED",
+      "INDEPENDENTLY_REVIEWED",
+      "OPERATIONAL"
+    ],
+    "failure_states": [
+      "DISPUTED",
+      "REGRESSED"
+    ],
+    "rules": [
+      "A claim may not skip states.",
+      "OPERATIONAL requires every readiness gate in assessment_readiness.json to be true.",
+      "INDEPENDENTLY_REVIEWED requires a reviewer who did not author the mechanism.",
+      "EVIDENCED requires BOTH positive and negative (falsification) tests that actually run.",
+      "Documentation alone is never evidence.",
+      "A mechanism change without a claim-version increment forces REGRESSED."
+    ]
+  },
+  "claims": [
+    {
+      "claim_id": "AEGIS-COMMIT-HIDING-001",
+      "version": 2,
+      "claim": "The published commitment does not reveal a low-entropy inject package before opening.",
+      "scope": {
+        "artifact": "aegis.inject-commitment.v2",
+        "algorithm": "SHA-384",
+        "canonicalization": "RFC8785-JCS"
+      },
+      "mechanism": {
+        "construction": "SHA-384(frame(domain, canonical_package, opening_salt))",
+        "opening_salt": {
+          "minimum_entropy_bits": 256,
+          "generated_by": "approved CSPRNG",
+          "withheld_until": "authorized reveal"
+        }
+      },
+      "assumptions": [
+        "The opening salt remains confidential until reveal.",
+        "The CSPRNG provides the required entropy.",
+        "Canonicalization is deterministic.",
+        "SHA-384 remains suitable for the stated purpose."
+      ],
+      "evidence": [
+        "TEST-COMMIT-CORRECT-OPENING",
+        "TEST-COMMIT-WRONG-SALT",
+        "TEST-COMMIT-TAMPERED-PACKAGE",
+        "TEST-COMMIT-FRAMING-BOUNDARY",
+        "TEST-COMMIT-PRE-REVEAL-ENUMERATION",
+        "TEST-COMMIT-SALT-ENTROPY"
+      ],
+      "evidence_location": "00-shared/tools/test_commitment.py",
+      "limitations": [
+        "Hiding fails if opening material is disclosed before reveal.",
+        "This construction does not conceal package length unless separately padded."
+      ],
+      "regression_triggers": [
+        "schema_change",
+        "algorithm_change",
+        "canonicalization_change",
+        "salt_storage_change",
+        "random_generator_change"
+      ],
+      "owner": "Exercise Assurance",
+      "independent_reviewer": null,
+      "status": "EVIDENCED",
+      "status_note": "Cannot reach INDEPENDENTLY_REVIEWED until an EA performer exists (readiness gate 'exercise_assurance_operational' is PENDING)."
+    },
+    {
+      "claim_id": "AEGIS-COMMIT-BINDING-001",
+      "version": 2,
+      "claim": "Exercise Assurance cannot substitute a different inject package after publishing the commitment.",
+      "scope": {
+        "artifact": "aegis.inject-commitment.v2",
+        "algorithm": "SHA-384"
+      },
+      "mechanism": {
+        "construction": "Digest over the length-framed preimage including the canonical package; supersession requires a new signed commitment chained to the prior one."
+      },
+      "assumptions": [
+        "SHA-384 collision resistance holds.",
+        "Canonicalization is deterministic.",
+        "Both commitments remain published on supersession."
+      ],
+      "evidence": [
+        "TEST-COMMIT-TAMPERED-PACKAGE",
+        "TEST-COMMIT-CORRECT-OPENING",
+        "TEST-COMMIT-FRAMING-BOUNDARY"
+      ],
+      "evidence_location": "00-shared/tools/test_commitment.py",
+      "limitations": [
+        "Binding is to the canonical serialization, not to intent. A semantically equivalent repackaging produces a different digest and must be superseded explicitly."
+      ],
+      "regression_triggers": [
+        "schema_change",
+        "algorithm_change",
+        "canonicalization_change"
+      ],
+      "owner": "Exercise Assurance",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "AEGIS-SOD-AUTHZ-001",
+      "version": 1,
+      "claim": "The Red Team can execute an authorized assessment but cannot produce a valid authorization for it.",
+      "scope": {
+        "artifact": "Aegis Red Team v0.2.0",
+        "environment": "all"
+      },
+      "mechanism": {
+        "construction": "The encrypted Ed25519 authorization private key is held by the White approval authority. Aegis refuses to run without a receipt verifying against a separately pinned trust key."
+      },
+      "assumptions": [
+        "The authorization private key is not accessible to Red. NOT YET ESTABLISHED - readiness gate 'key_custody_verified' is PENDING.",
+        "IAM denies Red access to the key material.",
+        "Operators cannot obtain the signing password."
+      ],
+      "evidence": [],
+      "evidence_gap": "No test attempts authorization AS RED and asserts denial. Custody is currently procedural, not demonstrated.",
+      "limitations": [
+        "Holds only while key custody holds. A signing key on an operator machine voids this claim entirely."
+      ],
+      "regression_triggers": [
+        "key_custody_change",
+        "iam_policy_change",
+        "signing_key_location_change"
+      ],
+      "owner": "White + CISO",
+      "independent_reviewer": null,
+      "status": "MECHANISM_IDENTIFIED",
+      "status_note": "The mechanism exists in code. The claim is NOT evidenced: nobody has attempted to authorize as Red and been denied."
+    },
+    {
+      "claim_id": "AEGIS-EVIDENCE-INDEPENDENCE-001",
+      "version": 2,
+      "claim": "The sealed Aegis audit ledger is evidence independent of the operator who produced it.",
+      "scope": {
+        "artifact": "Aegis Red Team v0.2.0"
+      },
+      "mechanism": {
+        "construction": "Domain-separated Ed25519 authorization and evidence seals use purpose-bound, separately generated keypairs. Both signing and verification reject a key whose purpose metadata does not match the operation."
+      },
+      "assumptions": [
+        "The evidence private key remains outside Red custody.",
+        "Purpose metadata and distinct public-key pins are deployed from reviewed configuration."
+      ],
+      "evidence": [
+        "red-team/tests/test_audit.py::test_signed_seal_rejects_recomputed_chain",
+        "red-team/tests/test_audit.py::test_authorization_key_cannot_seal_evidence",
+        "red-team/tests/test_authorization.py::test_evidence_key_cannot_authorize"
+      ],
+      "limitations": [
+        "The implementation prevents cross-purpose use through its supported API. Host administrators with raw private-key access can bypass application controls; production custody must enforce separation independently."
+      ],
+      "regression_triggers": [
+        "key_model_change"
+      ],
+      "owner": "Red Lead + White",
+      "independent_reviewer": null,
+      "status": "EVIDENCED",
+      "mechanism_changed_at": "2026-08-14-key-purpose-split",
+      "version_bumped_at": "2026-08-14-key-purpose-split",
+      "status_note": "Migration step 1 is implemented and falsification-tested. Operational independence still depends on the separate production-custody gate."
+    },
+    {
+      "claim_id": "AEGIS-LEDGER-TAMPER-001",
+      "version": 1,
+      "claim": "The audit chain detects mutation and interior deletion of ledger records.",
+      "scope": {
+        "artifact": "Aegis Red Team v0.1.0 AuditLedger; Sentinel Blue evidence store makes an equivalent claim"
+      },
+      "mechanism": {
+        "construction": "SHA-256 hash chain with exclusive file locking; verify() recomputes and refuses further appends after a break."
+      },
+      "assumptions": [
+        "An attacker cannot rewrite the whole file and recompute the chain undetected. Explicitly out of scope - external anchoring required."
+      ],
+      "evidence": [
+        "red-team/tests/test_audit.py::test_chain_verifies_and_tampering_is_detected",
+        "red-team/tests/test_audit.py::test_chain_detects_interior_deletion",
+        "blue-team/tests/test_detection_store.py::test_audit_chain_detects_mutation",
+        "blue-team/tests/test_detection_store.py::test_audit_chain_detects_interior_deletion",
+        "blue-team/tests/test_detection_store.py::test_audit_chain_detects_tail_deletion"
+      ],
+      "limitations": [
+        "Does not detect rollback or deletion of the entire store. Both projects state this."
+      ],
+      "regression_triggers": [
+        "ledger_format_change",
+        "hash_algorithm_change"
+      ],
+      "owner": "Red Lead",
+      "independent_reviewer": null,
+      "status": "EVIDENCED",
+      "status_note": "Positive and falsification tests now cover mutation and interior deletion in both implementations. Whole-store rollback remains explicitly excluded and requires external anchoring."
+    },
+    {
+      "claim_id": "RED-PATH-CONTAINMENT-001",
+      "version": 2,
+      "claim": "A source-review check cannot follow a symbolic link outside the authorized root.",
+      "scope": {
+        "artifact": "aegis_rt.checks.source",
+        "environment": "Linux and Windows"
+      },
+      "mechanism": {
+        "construction": "Path resolution constrained to the authorized root; links escaping it are rejected."
+      },
+      "assumptions": [
+        "The test executes on every supported platform."
+      ],
+      "evidence": [
+        "red-team/tests/test_checks.py::test_source_link_escape_is_rejected"
+      ],
+      "limitations": [
+        "The Windows falsification uses an NTFS directory junction because it exercises the reparse-point escape without requiring symbolic-link privilege."
+      ],
+      "regression_triggers": [
+        "path_handling_change",
+        "platform_support_change",
+        "ci_configuration_change"
+      ],
+      "owner": "Red Lead",
+      "independent_reviewer": null,
+      "status": "EVIDENCED",
+      "mechanism_changed_at": "2026-08-14-windows-junction-test",
+      "version_bumped_at": "2026-08-14-windows-junction-test",
+      "status_note": "The falsification test passes on this Windows host without privilege-dependent skips; CI runs it on Windows and Linux with skips forbidden."
+    },
+    {
+      "claim_id": "BLUE-NO-AUTONOMOUS-CONTAINMENT-001",
+      "version": 1,
+      "claim": "Sentinel Blue never performs containment, account disablement, process termination, or blocking; high-risk response requires two approvers.",
+      "scope": {
+        "artifact": "Sentinel Blue",
+        "environment": "all"
+      },
+      "mechanism": {
+        "construction": "The response module emits plans only; there is no execution path. Unknown response actions fail closed."
+      },
+      "assumptions": [
+        "No downstream integration silently executes an emitted plan."
+      ],
+      "evidence": [
+        "blue-team/tests/test_health_coverage_response.py::test_response_is_non_executing_and_two_person_for_high_risk",
+        "blue-team/tests/test_health_coverage_response.py::test_unknown_response_action_fails_closed"
+      ],
+      "limitations": [
+        "Constrains the platform, not the humans or the SOAR tooling that consumes its output."
+      ],
+      "regression_triggers": [
+        "response_module_change",
+        "new_integration_added"
+      ],
+      "owner": "Blue Lead",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "BLUE-AUDIT-ANCHOR-001",
+      "version": 1,
+      "claim": "Sentinel Blue's audit chain is externally anchored by a party that cannot write to it.",
+      "scope": {
+        "artifact": "SoD-11 head-hash export to White's evidence manifest"
+      },
+      "mechanism": {
+        "construction": "Chain head hash exported to White's WORM evidence manifest at each exercise close and monthly."
+      },
+      "assumptions": [
+        "White's manifest is genuinely append-only.",
+        "The export actually occurs on cadence."
+      ],
+      "evidence": [],
+      "evidence_gap": "Designed, never executed. No exercise has closed and no export has occurred.",
+      "limitations": [
+        "Procedural anchor, weaker than Aegis's cryptographic seal design."
+      ],
+      "regression_triggers": [
+        "evidence_store_change",
+        "export_cadence_change"
+      ],
+      "owner": "Blue Lead + White",
+      "independent_reviewer": null,
+      "status": "MECHANISM_IDENTIFIED"
+    },
+    {
+      "claim_id": "PROGRAM-RED-INDEPENDENCE-001",
+      "version": 2,
+      "claim": "Red is independent from development and from defense operations, and can therefore support CA-8(1) and SA-11(5) where organizational position permits.",
+      "scope": {
+        "artifact": "organizational structure",
+        "environment": "per-system determination required"
+      },
+      "mechanism": {
+        "construction": "Reporting lines: Red does not report through Yellow, Orange, or Blue, nor to an engineering manager whose systems it assesses."
+      },
+      "assumptions": [
+        "The reporting lines exist in the instantiated organization. Open Decisions O-1..O-16 are OPEN; no organization has been instantiated."
+      ],
+      "evidence": [],
+      "evidence_gap": "No organizational chart exists to verify. The model is parameterized against P2 defaults, not against a real org.",
+      "limitations": [
+        "Does NOT provide independent exercise scoring where Red participated.",
+        "Does NOT satisfy external organizational assessment (3PAO / C3PAO / QSA).",
+        "CA-2(1) applicability depends on assessment context and the authorizing authority.",
+        "Applicability is determined PER SYSTEM and is not inherited globally."
+      ],
+      "regression_triggers": [
+        "reporting_line_change",
+        "reorganization",
+        "contract_change"
+      ],
+      "owner": "CISO",
+      "independent_reviewer": null,
+      "status": "MECHANISM_IDENTIFIED",
+      "status_note": "v1 of this claim was overbroad ('Red closes F-1') and was withdrawn 2026-08-14."
+    },
+    {
+      "claim_id": "PROGRAM-READINESS-GATE-001",
+      "version": 3,
+      "claim": "No result may be presented as assurance while any readiness gate is false.",
+      "scope": {
+        "artifact": "assessment_readiness.json + claim_check.py"
+      },
+      "mechanism": {
+        "construction": "claim_check.py evaluates the gates and exits non-zero; CI blocks on a non-zero exit."
+      },
+      "assumptions": [
+        "The protected assessment-issuance workflow remains required and cannot be bypassed by repository administrators."
+      ],
+      "evidence": [
+        "00-shared/tools/claim_check.py --gates",
+        ".github/workflows/assessment-issuance.yml",
+        "purple-team/tests/test_assurance_scoring.py::test_operational_claim_rejected_when_not_ready"
+      ],
+      "limitations": [
+        "Enforces marking and exit status; cannot prevent a human from copying a number into a slide."
+      ],
+      "regression_triggers": [
+        "ci_configuration_change",
+        "readiness_config_change"
+      ],
+      "owner": "Program owner",
+      "independent_reviewer": null,
+      "status": "EVIDENCED",
+      "status_note": "The dedicated assessment-issuance workflow now invokes --require-ready and fails while readiness is false. Branch protection remains an external deployment prerequisite."
+    },
+    {
+      "claim_id": "PURPLE-FROZEN-PLAN-001",
+      "version": 2,
+      "claim": "Exercise scope, procedures, telemetry expectations, detection expectations, rollback state, readiness snapshot, rubric, and role-trust registry are content-addressed and immutable after freeze.",
+      "scope": {
+        "artifact": "Aegis Purple v0.1.0 exercise store"
+      },
+      "mechanism": {
+        "construction": "Strict canonical exercise-plan/1.0 serialization and SHA-256 digest stored with the exact plan JSON; every transition revalidates the digest."
+      },
+      "assumptions": [
+        "SHA-256 remains suitable.",
+        "Whole-store rollback is handled by an external anchor."
+      ],
+      "evidence": [
+        "purple-team/tests/test_models.py::test_plan_digest_is_deterministic",
+        "purple-team/tests/test_models.py::test_unknown_plan_field_fails_closed",
+        "purple-team/tests/test_store.py::test_conflicting_plan_replay_is_rejected",
+        "purple-team/tests/test_store.py::test_plan_tampering_is_detected"
+      ],
+      "limitations": [
+        "Content identity is not proof that the approved procedure is safe or effective."
+      ],
+      "regression_triggers": [
+        "plan_schema_change",
+        "canonicalization_change",
+        "hash_algorithm_change",
+        "store_schema_change",
+        "role_trust_change"
+      ],
+      "mechanism_changed_at": "2026-08-14-role-trust-pin",
+      "version_bumped_at": "2026-08-14-role-trust-pin",
+      "owner": "Purple Lead",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "PURPLE-SIGNED-TRANSITION-001",
+      "version": 2,
+      "claim": "The supported CLI lifecycle boundary rejects unsigned, tampered, stale, role-mismatched, plan-mismatched, and replayed transitions.",
+      "scope": {
+        "artifact": "Aegis Purple v0.1.0 CLI",
+        "algorithm": "Ed25519"
+      },
+      "mechanism": {
+        "construction": "Exact signed envelope binds plan digest, states, actor, role, reason, nonce, key ID, and a maximum five-minute validity window to a role public key in the registry whose digest is pinned by the frozen plan."
+      },
+      "assumptions": [
+        "Private keys remain outside the application.",
+        "The role trust registry is integrity protected.",
+        "System time is trustworthy."
+      ],
+      "evidence": [
+        "purple-team/tests/test_authority.py::test_valid_signed_transition_and_replay_rejection",
+        "purple-team/tests/test_authority.py::test_unpinned_role_registry_is_rejected",
+        "purple-team/tests/test_authority.py::test_tampered_transition_is_rejected",
+        "purple-team/tests/test_authority.py::test_role_key_mismatch_is_rejected",
+        "purple-team/tests/test_authority.py::test_long_lived_command_is_rejected"
+      ],
+      "limitations": [
+        "Direct library callers must provide an equivalently authenticated boundary.",
+        "Key custody and IAM denial are external prerequisites."
+      ],
+      "regression_triggers": [
+        "transition_schema_change",
+        "key_registry_change",
+        "algorithm_change",
+        "time_window_change",
+        "nonce_store_change",
+        "plan_trust_pin_change"
+      ],
+      "mechanism_changed_at": "2026-08-14-role-trust-pin",
+      "version_bumped_at": "2026-08-14-role-trust-pin",
+      "owner": "White + Purple Lead",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "PURPLE-EVIDENCE-BINDING-001",
+      "version": 1,
+      "claim": "Evidence and six-stage results cannot be credited to an exercise or test case other than the frozen case they reference.",
+      "scope": {
+        "artifact": "Aegis Purple v0.1.0 evidence store"
+      },
+      "mechanism": {
+        "construction": "Foreign-keyed evidence records bind exercise ID, frozen test-case ID, producer, media type, artifact digest, and collection time; result insertion verifies same-case ownership."
+      },
+      "assumptions": [
+        "Evidence content hashes are computed over the preserved artifact.",
+        "Producer identities are authenticated by the deployment boundary."
+      ],
+      "evidence": [
+        "purple-team/tests/test_store.py::test_evidence_outside_frozen_test_case_is_rejected",
+        "purple-team/tests/test_store.py::test_cross_test_case_evidence_is_rejected",
+        "purple-team/tests/test_store.py::test_evidence_verification_requires_all_six_stages"
+      ],
+      "limitations": [
+        "A digest proves byte identity, not truth, independence, or collection completeness."
+      ],
+      "regression_triggers": [
+        "evidence_schema_change",
+        "result_schema_change",
+        "foreign_key_change",
+        "verification_rule_change"
+      ],
+      "owner": "Exercise Assurance",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "PURPLE-SCORE-FAILCLOSED-001",
+      "version": 1,
+      "claim": "A configured automatic failure forces the final score to zero before aggregation, and missing evidence prevents scoring.",
+      "scope": {
+        "artifact": "Aegis Purple v0.1.0 diagnostic scorer"
+      },
+      "mechanism": {
+        "construction": "Exact component matching, mandatory evidence lists, strict numeric types, weight-sum validation, and auto-fail evaluation precede pass calculation."
+      },
+      "assumptions": [
+        "The frozen rubric represents the approved governance decision.",
+        "Exercise Assurance validates evidence quality separately."
+      ],
+      "evidence": [
+        "purple-team/tests/test_assurance_scoring.py::test_auto_fail_zeroes_score_before_aggregation",
+        "purple-team/tests/test_assurance_scoring.py::test_missing_evidence_cannot_receive_score",
+        "purple-team/tests/test_assurance_scoring.py::test_boolean_score_is_rejected"
+      ],
+      "limitations": [
+        "The scorer cannot prevent a human from copying a diagnostic value into an unauthorized presentation."
+      ],
+      "regression_triggers": [
+        "scorecard_schema_change",
+        "weight_change",
+        "auto_fail_change",
+        "marking_change"
+      ],
+      "owner": "Exercise Assurance",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "PURPLE-AUDIT-INTEGRITY-001",
+      "version": 2,
+      "claim": "The live Aegis Purple store detects transition mutation, interior deletion, tail deletion, and modification of exercise, evidence, result, or replay state relative to stored integrity roots.",
+      "scope": {
+        "artifact": "Aegis Purple v0.1.0 SQLite store"
+      },
+      "mechanism": {
+        "construction": "Sequence-numbered SHA-256 transition chain with predecessor hashes and transactional head/count metadata, plus a canonical state root over exercises, evidence, results, and consumed nonces."
+      },
+      "assumptions": [
+        "The complete database is not rolled back as a unit.",
+        "SQLite durability settings are honored by the filesystem."
+      ],
+      "evidence": [
+        "purple-team/tests/test_store.py::test_transition_mutation_is_detected",
+        "purple-team/tests/test_store.py::test_interior_transition_deletion_is_detected",
+        "purple-team/tests/test_store.py::test_tail_deletion_is_detected",
+        "purple-team/tests/test_store.py::test_direct_state_tampering_is_detected",
+        "purple-team/tests/test_store.py::test_evidence_tampering_is_detected",
+        "purple-team/tests/test_store.py::test_stale_transition_is_rejected"
+      ],
+      "limitations": [
+        "Whole-store rollback requires publication of export_anchor() to a separately administered append-only witness."
+      ],
+      "regression_triggers": [
+        "audit_schema_change",
+        "state_schema_change",
+        "hash_algorithm_change",
+        "transaction_change",
+        "anchor_change"
+      ],
+      "mechanism_changed_at": "2026-08-14-state-root",
+      "version_bumped_at": "2026-08-14-state-root",
+      "owner": "Purple Lead + White",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "EXERCISE-PREFLIGHT-REFUSAL-001",
+      "version": 2,
+      "claim": "An exercise cannot start unless authorization, mode, revocation status, and all eleven safety boundaries hold.",
+      "scope": {
+        "artifact": "exercise/preflight.py",
+        "environment": "exercise harness"
+      },
+      "mechanism": {
+        "construction": "Registry- and role-verified Ed25519 authorization and environment-attestation signatures, mode gating against readiness gates, revocation checks at preflight and four runner safety boundaries, and per-boundary field checks."
+      },
+      "assumptions": [
+        "The readiness config reflects real gate state.",
+        "Production trust-store enrollment and custody are truthful external inputs."
+      ],
+      "evidence": [
+        "exercise/tests/test_preflight.py::test_refuses_wrong_signing_key",
+        "exercise/tests/test_preflight.py::test_refuses_expired_authorization",
+        "exercise/tests/test_preflight.py::test_refuses_when_revoked",
+        "exercise/tests/test_preflight.py::test_refuses_each_safety_boundary_independently (11 BOUNDARY subtests)",
+        "exercise/tests/test_preflight.py::test_refuses_unknown_mode",
+        "exercise/tests/test_preflight.py::test_refuses_tampered_environment_attestation_signature",
+        "exercise/tests/test_rehearsal.py::test_formal_mode_runner_accepts_only_production_roles_when_gates_are_clear",
+        "exercise/tests/test_rehearsal.py::test_revocation_halts_running_exercise_at_next_safety_boundary"
+      ],
+      "limitations": [
+        "The formal path is engineering-tested with ephemeral production-role keys; no real production authority is enrolled."
+      ],
+      "regression_triggers": [
+        "boundary_config_change",
+        "readiness_config_change",
+        "authorization_schema_change"
+      ],
+      "owner": "White Exercise Director",
+      "independent_reviewer": null,
+      "status": "EVIDENCED",
+      "mechanism_changed_at": "2026-08-14-signed-attestation-formal-runner-revocation",
+      "version_bumped_at": "2026-08-14-signed-attestation-formal-runner-revocation"
+    },
+    {
+      "claim_id": "EXERCISE-CLEARANCE-BINDING-001",
+      "version": 2,
+      "claim": "run_rehearsal.py cannot execute directly, cannot reuse an old clearance, and cannot execute modified inputs; it proceeds only with a valid short-lived clearance from a trusted, non-revoked authorization.",
+      "scope": {
+        "artifact": "exercise/clearance.py + run_rehearsal.py",
+        "environment": "exercise harness"
+      },
+      "mechanism": {
+        "construction": "Clearance signed over a domain-separated payload binding exercise id, mode, authorization digest, manifest digest, approved scope, authorization expiry, revocation-list digest, safety-boundary digest, issue/expiry times, single-use nonce, and runner identity. The runner verifies it independently and consumes the nonce. InvalidSignature is caught specifically and fails closed."
+      },
+      "assumptions": [
+        "The clearance signing key is not accessible to whoever runs the runner. NOT ESTABLISHED - readiness gate 'key_custody_verified' is PENDING.",
+        "Trust-store records establish signer identity; a valid signature from an unknown key is unauthorized."
+      ],
+      "evidence": [
+        "exercise/tests/test_clearance.py::test_direct_runner_invocation_is_refused",
+        "exercise/tests/test_clearance.py::test_refuses_nonce_replay",
+        "exercise/tests/test_clearance.py::test_refuses_manifest_change_after_clearance",
+        "exercise/tests/test_clearance.py::test_refuses_tampered_signature",
+        "exercise/tests/test_clearance.py::test_refuses_unknown_key_even_with_valid_signature",
+        "exercise/tests/test_clearance.py::test_refuses_boundary_config_change",
+        "exercise/tests/test_clearance.py::test_formal_mode_refuses_fixture_trust_store",
+        "exercise/tests/test_clearance.py::test_refuses_signer_with_wrong_role",
+        "exercise/tests/test_rehearsal.py::test_formal_mode_runner_accepts_only_production_roles_when_gates_are_clear"
+      ],
+      "limitations": [
+        "Defends against accidental bypass, replay, and modified inputs. Does NOT defend against host-level access to the clearance signing key.",
+        "Engineering mode is cleared by a TEST_ONLY fixture issuer; the real production trust store remains empty.",
+        "Replay protection is PER HOST: the nonce ledger is machine-local and gitignored (see EXERCISE-NONCE-LEDGER-001)."
+      ],
+      "regression_triggers": [
+        "clearance_schema_change",
+        "trust_store_change",
+        "runner_entrypoint_change",
+        "manifest_path_change"
+      ],
+      "owner": "Red Lead + White",
+      "independent_reviewer": null,
+      "status": "EVIDENCED",
+      "mechanism_changed_at": "2026-08-14-production-role-path",
+      "version_bumped_at": "2026-08-14-production-role-path"
+    },
+    {
+      "claim_id": "EXERCISE-EXECUTION-RECEIPT-001",
+      "version": 1,
+      "claim": "A Red execution receipt is a separate signed object bound to the authorization fingerprint and attempted test cases.",
+      "scope": {
+        "artifact": "exercise/assurance_objects.py"
+      },
+      "mechanism": {
+        "construction": "Domain-separated Ed25519 receipt with exact fields for exercise, authorization digest, test cases, action digest, timestamps, and Red execution key."
+      },
+      "assumptions": [
+        "The enrolled Red execution key remains distinct from authorization keys."
+      ],
+      "evidence": [
+        "exercise/tests/test_assurance_objects.py::test_red_execution_receipt_is_separate_and_bound_to_authorization",
+        "TEST-EXECUTION-RECEIPT-TAMPER-REJECTED"
+      ],
+      "limitations": [
+        "A receipt proves what its signer attested, not that every action was captured."
+      ],
+      "regression_triggers": [
+        "receipt_schema_change",
+        "execution_key_role_change",
+        "authorization_binding_change"
+      ],
+      "owner": "Red Lead + White",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "EXERCISE-ASSESSMENT-SIGNATURE-001",
+      "version": 1,
+      "claim": "Only an enrolled Exercise Assurance or Internal Audit key can sign a complete assessment result through the supported verifier.",
+      "scope": {
+        "artifact": "exercise/assurance_objects.py"
+      },
+      "mechanism": {
+        "construction": "Role-restricted domain-separated signature binds scorecard, evidence manifest, completeness, scores, marking, and issue time."
+      },
+      "assumptions": [
+        "Exercise Assurance key custody and independence hold externally."
+      ],
+      "evidence": [
+        "exercise/tests/test_assurance_objects.py::test_exercise_assurance_signs_complete_assessment",
+        "exercise/tests/test_assurance_objects.py::test_red_key_cannot_sign_assessment",
+        "TEST-RED-ASSESSMENT-ROLE-REJECTED"
+      ],
+      "limitations": [
+        "Engineering tests do not instantiate an independent human assessor."
+      ],
+      "regression_triggers": [
+        "assessment_schema_change",
+        "assessment_role_change",
+        "completeness_rule_change"
+      ],
+      "owner": "Exercise Assurance",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "EXERCISE-REVOCATION-BOUNDARY-001",
+      "version": 1,
+      "claim": "A revocation becoming effective during execution halts the runner at the next material safety boundary.",
+      "scope": {
+        "artifact": "exercise/run_rehearsal.py"
+      },
+      "mechanism": {
+        "construction": "The runner re-evaluates exercise/key revocations before baseline, after baseline, before retest, and before evidence write."
+      },
+      "assumptions": [
+        "The revocation feed is available and integrity-protected."
+      ],
+      "evidence": [
+        "exercise/tests/test_rehearsal.py::test_revocation_halts_running_exercise_at_next_safety_boundary",
+        "TEST-MIDRUN-REVOCATION-REJECTED-EXECUTION"
+      ],
+      "limitations": [
+        "A blocking host failure between boundaries is handled by the independent STOP mechanism."
+      ],
+      "regression_triggers": [
+        "runner_stage_change",
+        "revocation_schema_change",
+        "boundary_check_change"
+      ],
+      "owner": "Executive authority + White",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "EXERCISE-KEY-LIFECYCLE-001",
+      "version": 1,
+      "claim": "The lifecycle validator refuses incomplete or mismatched rotation and recovery evidence for the five program key purposes.",
+      "scope": {
+        "artifact": "exercise/assurance_objects.py"
+      },
+      "mechanism": {
+        "construction": "Exact five-purpose records require distinct old/new fingerprints, recovered-current equality, valid chronology, and holder-unavailable exercise."
+      },
+      "assumptions": [
+        "Submitted fingerprints were captured from the actual custody system."
+      ],
+      "evidence": [
+        "exercise/tests/test_assurance_objects.py::test_rotation_and_holder_unavailable_recovery_for_all_five_keys",
+        "TEST-KEY-RECOVERY-MISMATCH-REJECTED"
+      ],
+      "limitations": [
+        "The validator cannot perform an HSM recovery; A5 supplies operational evidence."
+      ],
+      "regression_triggers": [
+        "key_purpose_change",
+        "lifecycle_schema_change",
+        "recovery_rule_change"
+      ],
+      "owner": "White + CISO",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "RED-REPOSITORY-POSTURE-001",
+      "version": 1,
+      "claim": "The fixed Red registry includes a bounded offline check for unpinned dependencies and write-all workflow permissions.",
+      "scope": {
+        "artifact": "aegis_rt.checks.repository_posture",
+        "attack": "T1195.002"
+      },
+      "mechanism": {
+        "construction": "Resolved-root-constrained traversal, file/finding budgets, fixed manifest selection, and static dependency/workflow rules."
+      },
+      "assumptions": [
+        "Repository manifests use supported formats."
+      ],
+      "evidence": [
+        "red-team/tests/test_repository_posture.py::test_detects_unpinned_dependency_and_write_all_workflow",
+        "red-team/tests/test_repository_posture.py::test_exact_dependency_and_read_only_workflow_are_clean",
+        "red-team/tests/test_repository_posture.py::test_link_escape_is_rejected",
+        "red-team/tests/test_repository_posture.py::test_finding_budget_truncates"
+      ],
+      "limitations": [
+        "This check does not replace SCA, provenance verification, or workflow semantic review."
+      ],
+      "regression_triggers": [
+        "check_registry_change",
+        "manifest_rule_change",
+        "path_handling_change"
+      ],
+      "owner": "Red Lead",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "PROGRAM-CI-SEPARATION-001",
+      "version": 2,
+      "claim": "The assurance-issuance workflow cannot pass while a readiness gate is false; only engineering CI may pass under an explicit hold.",
+      "scope": {
+        "artifact": ".github/workflows/",
+        "environment": "CI"
+      },
+      "mechanism": {
+        "construction": "assessment-issuance.yml must contain --require-ready and must NOT contain --allow-not-ready; no workflow may combine both. Asserted by test, not by convention."
+      },
+      "assumptions": [
+        "CI runs the guard test. NOTE: as of 2026-08-14 the program is UNTRACKED and no workflow has ever executed; the guard currently runs via the local runner (run_ci.py).",
+        "Workflow files are the authoritative CI definition."
+      ],
+      "evidence": [
+        "00-shared/tools/test_ci_integrity.py::test_issuance_workflow_never_permits_a_readiness_hold",
+        "00-shared/tools/test_ci_integrity.py::test_no_third_workflow_silently_issues_assurance",
+        "00-shared/tools/test_ci_integrity.py::test_engineering_workflow_does_not_claim_readiness",
+        "falsification: injecting --allow-not-ready into assessment-issuance.yml FAILS 2 tests (verified 2026-08-14)",
+        "00-shared/tools/run_ci.py (local execution, 9/9 gates)"
+      ],
+      "limitations": [
+        "Guards the workflow files only. A runner configured outside these files, or a manually dispatched job, is not covered.",
+        "Cannot prevent a human running the validator locally and quoting the result.",
+        "Corrected 2026-08-14: v1 asserted CI enforcement while the workflows sat at a nested path GitHub Actions never reads. The separation is now guarded at the repository root and by the local runner."
+      ],
+      "regression_triggers": [
+        "workflow_file_change",
+        "validator_flag_change",
+        "new_workflow_added"
+      ],
+      "owner": "Program owner",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "PROGRAM-REPO-HYGIENE-001",
+      "version": 1,
+      "claim": "Fixture private keys and commitment opening material exist on disk for engineering use but can never enter version control.",
+      "scope": {
+        "artifact": "Purple team/.gitignore",
+        "environment": "git"
+      },
+      "mechanism": {
+        "construction": ".gitignore excludes *_fixture_private_keys.json, *.pem, *.key, *_private*.json, opening material, and nonce ledgers. A test asserts the keys are ignored AND that no secret-shaped file is tracked."
+      },
+      "assumptions": [
+        "Contributors commit from within this repository rather than copying files elsewhere."
+      ],
+      "evidence": [
+        "00-shared/tools/test_repo_hygiene.py::test_detector_rejects_secret_shaped_paths (FALSIFICATION: 5 poisoned paths must be caught)",
+        "00-shared/tools/test_repo_hygiene.py::test_detector_does_not_flag_ordinary_files (NEGATIVE: no false positives)",
+        "00-shared/tools/test_repo_hygiene.py::test_fixture_private_keys_exist_but_are_ignored",
+        "00-shared/tools/test_repo_hygiene.py::test_no_secret_material_is_tracked",
+        "00-shared/tools/test_repo_hygiene.py::test_gitignore_exists_and_covers_secrets"
+      ],
+      "limitations": [
+        "Guards this repository only. A file copied into another repo is not covered.",
+        "Cannot retroactively remove a secret already committed elsewhere."
+      ],
+      "regression_triggers": [
+        "gitignore_change",
+        "new_key_material_added",
+        "repo_root_change"
+      ],
+      "owner": "Program owner",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "PROGRAM-CI-REACHABLE-001",
+      "version": 1,
+      "claim": "The program's CI gates are executable: reachable by GitHub Actions when pushed, and runnable locally without any external service.",
+      "scope": {
+        "artifact": ".github/workflows/purple-team-integrity.yml + 00-shared/tools/run_ci.py",
+        "environment": "CI and local"
+      },
+      "mechanism": {
+        "construction": "A path-scoped workflow at the REPOSITORY ROOT (GitHub reads only <repo-root>/.github/workflows/), plus a local runner executing the same nine gates. A test asserts the root workflow exists and actually invokes the gates."
+      },
+      "assumptions": [
+        "The repository is eventually pushed to a host that executes Actions. Until then only the local runner provides enforcement."
+      ],
+      "evidence": [
+        "00-shared/tools/test_repo_hygiene.py::test_program_workflows_are_reachable_by_ci",
+        "00-shared/tools/test_repo_hygiene.py::test_root_workflow_actually_invokes_the_program_gates",
+        "local run 2026-08-14: 9/9 engineering gates PASS; --assurance FAILS closed (exit 1)"
+      ],
+      "limitations": [
+        "The root workflow has NEVER EXECUTED - the program directory is untracked and nothing has been pushed.",
+        "Local runner enforcement depends on a human invoking it; it is not a pre-commit hook.",
+        "The previously claimed CI enforcement (2026-08-14, earlier) was unevidenced: workflows sat at a nested path Actions never reads."
+      ],
+      "regression_triggers": [
+        "workflow_relocation",
+        "repo_root_change",
+        "gate_list_change"
+      ],
+      "owner": "Program owner",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "PROGRAM-GATE-MANIFEST-001",
+      "version": 1,
+      "claim": "The local runner and the GitHub workflow cannot drift: both derive from one gate manifest, and CI is pinned against supply-chain substitution.",
+      "scope": {
+        "artifact": "00-shared/config/ci_gates.json + root workflow",
+        "environment": "CI and local"
+      },
+      "mechanism": {
+        "construction": "Single manifest consumed by run_ci.py; tests assert the root workflow covers every manifest gate, pins all actions to 40-char SHAs, and installs dependencies with --require-hashes."
+      },
+      "assumptions": [
+        "Contributors add gates to the manifest rather than only to one runner."
+      ],
+      "evidence": [
+        "00-shared/tools/test_gate_manifest.py::test_workflow_covers_every_engineering_gate (NEGATIVE)",
+        "00-shared/tools/test_gate_manifest.py::test_workflow_pins_actions_to_sha (NEGATIVE)",
+        "00-shared/tools/test_gate_manifest.py::test_workflow_installs_hash_pinned_requirements (NEGATIVE)",
+        "00-shared/tools/test_gate_manifest.py::test_assurance_gate_is_not_in_the_engineering_list (NEGATIVE)"
+      ],
+      "limitations": [
+        "Guards the workflow file, not the runner host.",
+        "Does not verify the pinned SHAs correspond to the intended action releases."
+      ],
+      "regression_triggers": [
+        "gate_added",
+        "workflow_change",
+        "manifest_change"
+      ],
+      "owner": "Program owner",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "EXERCISE-NONCE-LEDGER-001",
+      "version": 1,
+      "claim": "The replay ledger cannot grow without bound, and cannot silently lose replay protection.",
+      "scope": {
+        "artifact": "exercise/clearance.py",
+        "environment": "exercise harness"
+      },
+      "mechanism": {
+        "construction": "Entries older than 24x the clearance TTL are pruned (such clearances are already refused by the expiry check); unparsable entries are retained rather than discarded; a corrupt ledger fails closed; a hard entry ceiling refuses rather than degrading."
+      },
+      "assumptions": [
+        "Host clock is not adjusted backwards by more than the retention margin."
+      ],
+      "evidence": [
+        "exercise/tests/test_clearance.py::test_expired_nonces_are_pruned",
+        "exercise/tests/test_clearance.py::test_unparsable_entries_are_retained_never_discarded (NEGATIVE)",
+        "exercise/tests/test_clearance.py::test_corrupt_ledger_fails_closed (NEGATIVE)",
+        "exercise/tests/test_clearance.py::test_replay_still_refused_within_retention (NEGATIVE)"
+      ],
+      "limitations": [
+        "The ledger is machine-local and gitignored: replay protection is PER HOST. A clearance replayed on a different host is not blocked. Cross-host protection needs a shared ledger and is a deployment decision.",
+        "Pruning assumes a monotonic-enough clock."
+      ],
+      "regression_triggers": [
+        "ttl_change",
+        "retention_change",
+        "ledger_format_change"
+      ],
+      "owner": "Red Lead + White",
+      "independent_reviewer": null,
+      "status": "EVIDENCED"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:bd25a1e7-babc-42dc-9e12-9735f4f9d81e",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-08-14T00:00:00Z",
+    "component": {
+      "type": "application",
+      "bom-ref": "pkg:pypi/aegis-purple-team@0.1.0",
+      "name": "aegis-purple-team",
+      "version": "0.1.0"
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/cryptography@50.0.0",
+      "name": "cryptography",
+      "version": "50.0.0",
+      "purl": "pkg:pypi/cryptography@50.0.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/cffi@2.0.0",
+      "name": "cffi",
+      "version": "2.0.0",
+      "purl": "pkg:pypi/cffi@2.0.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:pypi/pycparser@2.22",
+      "name": "pycparser",
+      "version": "2.22",
+      "purl": "pkg:pypi/pycparser@2.22"
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "pkg:pypi/aegis-purple-team@0.1.0",
+      "dependsOn": ["pkg:pypi/cryptography@50.0.0"]
+    },
+    {
+      "ref": "pkg:pypi/cryptography@50.0.0",
+      "dependsOn": ["pkg:pypi/cffi@2.0.0"]
+    },
+    {
+      "ref": "pkg:pypi/cffi@2.0.0",
+      "dependsOn": ["pkg:pypi/pycparser@2.22"]
+    },
+    {
+      "ref": "pkg:pypi/pycparser@2.22",
+      "dependsOn": []
+    }
+  ]
+}
+

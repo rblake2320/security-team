@@ -1,0 +1,15 @@
+[
+  {"source": "windows-security", "host": "*", "max_age_seconds": 300},
+  {"source": "sysmon", "host": "*", "max_age_seconds": 300},
+  {"source": "edr", "host": "*", "max_age_seconds": 120},
+  {"source": "dns", "host": "*", "max_age_seconds": 300},
+  {"source": "firewall", "host": "*", "max_age_seconds": 300},
+  {"source": "identity", "host": "*", "max_age_seconds": 300},
+  {"source": "cloud-audit", "host": "*", "max_age_seconds": 600},
+  {"source": "email-security", "host": "*", "max_age_seconds": 600},
+  {"source": "backup", "host": "*", "max_age_seconds": 3600},
+  {"source": "vulnerability-scanner", "host": "*", "max_age_seconds": 86400},
+  {"source": "data-security", "host": "*", "max_age_seconds": 600},
+  {"source": "internet-scan", "host": "*", "max_age_seconds": 3600},
+  {"source": "threat-intelligence", "host": "*", "max_age_seconds": 86400}
+]

@@ -1,0 +1,1 @@
+{"fix_id":"FIX-OBJECT-SCOPE-001","change":"Enforce identity.project_id == record.project_id before returning a record","retest_id":"RT-IDOR-001"}

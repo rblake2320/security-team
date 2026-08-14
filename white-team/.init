@@ -1,0 +1,148 @@
+# .init — machine-readable team manifest (YAML)
+# Read this to bootstrap as, or route work to, the White Team.
+# Authoritative prose lives in CHARTER.md; this file must not contradict it.
+init_version: "1.0"
+schema_owner: "00-shared/02_org_structure_and_raci.md"
+
+team:
+  id: white
+  name: "White Team"
+  color: "#e5e7eb"
+  folder: white-team
+  function: "Independent governance, authorization, exercise control, safety, scoring, after-action reporting"
+  mission: >
+    Provide independent authorization, safety, legal and privacy oversight,
+    deconfliction, evidence integrity, scoring, and after-action reporting for all
+    authorized security testing — and hold unconditional authority to pause or
+    terminate any exercise.
+  lead_role: "White Exercise Director"
+  reports_to: "Chief Risk Officer | General Counsel | CIO   # see Open Decision O-4"
+  must_not_report_to:
+    - "CISO, where the CISO owns exercise participants"
+    - "Any system owner under test"
+  independence: LOAD_BEARING                     # the one control that cannot be traded away
+  dedicated_or_virtual:
+    P1: "virtual cell — 0.25 FTE, but a NAMED independent Exercise Director"
+    P2: "virtual cell — 0.5 FTE Exercise Director"
+    P3: "dedicated White Cell — 2.0-3.0 FTE"
+
+files:
+  charter: CHARTER.md
+  playbook: PLAYBOOK.md
+  artifacts: ARTIFACTS.md
+  ai_agent: AI_AGENT.md
+  changelog: CHANGELOG.md
+  roe_template: ../00-shared/04_rules_of_engagement_template.md
+
+owns:
+  workflow_stages: [3, 4, 7, 10, 14]
+  contributes_to_stages: [8, 13, 15]
+  gates_enforced:
+    - "G1 — no system-owner signature, no scope"
+    - "G2 — conditional approval is denial"
+    - "G3 — no-go means no-go"
+  artifacts: [A4, A10, A11, A12, "RoE", "Authorization Record", "Answer Key", "Decision Log", "Scoring Rubric", "Destruction Certificate"]
+  metrics:
+    - "authorization completeness (target 100%)"
+    - "scope violations (target 0)"
+    - "RoE turnaround (target <=5 business days)"
+    - "AAR timeliness (target <=10 business days)"
+    - "M-15 safety stop rate (healthy band 5-20%, U-curve NOT lower-is-better)"
+
+authority:
+  decides:
+    - "Exercise approval or denial — final"
+    - "RoE terms — final"
+    - "STOP / PAUSE / TERMINATE — unconditional, immediate, non-appealable during execution"
+    - "RESUME — sole authority"
+    - "Real-incident declaration during an exercise"
+    - "Finding severity disputes"
+    - "Final score and AAR content — not editable by participants"
+  routes_but_does_not_decide:
+    - "Risk acceptance — the System Owner signs (SoD-6)"
+  denied:
+    - "Designing test cases or choosing techniques"
+    - "Operating tools or touching target systems"
+    - "Remediating or engineering"
+    - "Advocating for Red or Blue"
+
+separation_of_duties:
+  - "SoD-2 — authorizer may not execute"
+  - "SoD-4 — scorer may not be a participant"
+  - "SoD-5 — evidence custodian may not be a participant; storage is WORM"
+  - "SoD-11 — receives Blue's audit-chain head hash as the external anchor (conflict C-9)"
+
+depends_on:
+  purple: "Exercise proposals, threat scenarios, test cases, safety assessment draft"
+  system_owners: "Authorization — MANDATORY concurrence, per system"
+  legal_privacy: "Review — MANDATORY concurrence"
+  blue: "Audit-chain head hash; deconfliction participation"
+  ops: "Change calendar, availability constraints"
+
+provides_to:
+  all: "Approved RoE, stop/resume decisions, independent AAR, score"
+  grc: "Authorization records, evidence manifest, residual risk package"
+  csirt: "Deconfliction answer key (sealed, released per query)"
+
+integrations:
+  why_engine:
+    role: "verifier, not author"
+    obligation: "Confirm a WhyCase exists before an exercise is formally closed (RoE 5.19)"
+    publish_target: outbox
+  soul_system:
+    markers: ["SOUL-DECISION:"]
+    emits_on: ["scope, safety, severity, or status decisions"]
+    constraint: "S-2 — the Decision Log remains the record; the marker is a copy for learning"
+    never_emit: ["blind-phase details until the phase ends (S-4)", "CUI", "evidence content"]
+
+staffing:
+  minimum: { P1: 0.25, P2: 0.5, P3: 2.0 }
+  mature:  { P1: 0.5, P2: 2.0, P3: 4.5 }
+
+assessed_by:                              # White cannot grade itself (SoD-4)
+  role: "Exercise Assurance Authority"    # a ROLE, not an eighth colour team
+  spec: "00-shared/18_exercise_assurance.md"
+  performed_by:
+    internal: "Internal Audit"
+    higher_assurance: "external facilitator"
+    framework_mandated: "3PAO | C3PAO | QSA | framework-named assessor"
+  principle: >
+    White still CONTROLS the exercise. Exercise Assurance assesses how White performed
+    that control. It does not control anything.
+  permissions_exhaustive:
+    - "EA-1 hold the sealed inject package"
+    - "EA-2 observe White decisions"
+    - "EA-3 validate timestamps and evidence"
+    - "EA-4 compute the White score"
+    - "EA-5 sign the final assessment result (assessment key)"
+    - "EA-6 report interference or conflicts of interest"
+  denied:
+    - "controlling the exercise or any part of it"
+    - "approving/denying an RoE, scope change, or resumption"
+    - "countermanding a White stop decision in flight"
+    - "altering execution evidence or any artifact"
+
+adversarial_review:
+  status: not_started
+  owner: orange
+  priority: HIGHEST
+  question: >
+    How would an adversary — or an ambitious insider — make the authorization
+    function approve something it should not? Defeat White and every other control
+    in the model becomes negotiable.
+
+bootstrap:
+  - "CONFIRM the reporting line is outside the participant chain. If not, STOP — the function does not exist."
+  - "Close Open Decision O-4 before anything else"
+  - "Instantiate the RoE template once with Legal and Privacy pre-approval"
+  - "Build and LIVE-TEST the emergency contact roster (phone call, not a list review)"
+  - "Publish stop conditions; every participant confirms in writing they know how to call a stop"
+  - "Write 'default on ambiguity is real incident' into the IR PLAN, not just exercise docs"
+  - "Verify evidence store immutability by test"
+
+blind_phase_rule: >
+  Collaborative by default. A blind phase is a WHITE-AUTHORIZED TEST MODE requiring a signed
+  objective, named blinded participants, enumerated withheld information, a bounded window, a
+  declassification trigger, named safety observers, and live deconfliction. It EXPIRES
+  AUTOMATICALLY at 'end' and must not continue merely because nobody ended it. Extension
+  requires a new signature. Schema: 00-shared/04_rules_of_engagement_template.md sec 5.10.1

@@ -1,0 +1,7 @@
+{
+  "key_id": "fixture-audit-2026",
+  "role": "Internal Audit / Exercise Assurance",
+  "environment": "TEST_ONLY",
+  "public_key": "0OHxj6rMJCDv44vw6gaj2Ak1E1MbzGWt/xXwLxE8NXw=",
+  "WARNING": "FIXTURE KEY. Can never satisfy a production gate. Formal mode refuses it."
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "aegis.purple.gate-attestation/1.0",
+  "gate_id": "key_custody_verified",
+  "subject": "REPLACE_WITH_PRODUCTION_KEY_DEPLOYMENT",
+  "issued_at": "REPLACE_WITH_UTC_TIMESTAMP",
+  "expires_at": "REPLACE_WITH_UTC_TIMESTAMP_NO_MORE_THAN_90_DAYS_LATER",
+  "assertions": [
+    "authorization_and_evidence_keys_distinct",
+    "authorization_key_non_exportable_white_custody",
+    "emergency_revocation_exercised_end_to_end",
+    "key_use_logs_holder_immutable",
+    "red_access_denial_exercised",
+    "rotation_and_recovery_exercised"
+  ],
+  "evidence_sha256": ["REPLACE_WITH_LOWERCASE_SHA256"],
+  "signatures": [
+    {"key_id": "REPLACE_WHITE_KEY", "role": "white", "signature": "REPLACE_BASE64_ED25519_SIGNATURE"},
+    {"key_id": "REPLACE_CISO_KEY", "role": "ciso", "signature": "REPLACE_BASE64_ED25519_SIGNATURE"}
+  ]
+}

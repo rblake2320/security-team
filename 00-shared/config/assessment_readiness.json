@@ -1,0 +1,131 @@
+{
+  "schema": "assessment-readiness/1.0",
+  "authority": "Program owner decision, 2026-08-14",
+  "spec": "00-shared/21_readiness_gate.md",
+  "purpose": "Machine-enforced. A documented warning is not a gate; this file is evaluated before any result may be presented as assurance.",
+
+  "assessment_readiness": {
+    "required_gates": [
+      "canonical_implementation_selected",
+      "exercise_assurance_operational",
+      "key_custody_verified",
+      "containment_verified_all_supported_platforms"
+    ],
+    "evaluation": "all",
+    "on_failure": {
+      "status": "NOT_ASSESSMENT_READY",
+      "allow_exercise": true,
+      "allow_diagnostic_score": true,
+      "allow_assurance_statement": false,
+      "result_marking": "TRAINING_OR_ENGINEERING_USE_ONLY"
+    }
+  },
+
+  "gate_definitions": {
+    "canonical_implementation_selected": {
+      "closure_item": 1,
+      "closure_ref": "R-8",
+      "owner": "Owner / ATLAS",
+      "verification": [
+        "One path declared canonical in writing",
+        "The other archived or removed from active development",
+        "CI fails on a duplicate 'aegis-red-team' package identity",
+        "red-team/CHANGELOG.md records the decision"
+      ],
+      "evidence": [
+        "00-shared/config/canonical_implementations.json",
+        "tools/verify_canonical_packages.py",
+        ".github/workflows/engineering-integrity.yml",
+        "red-team/CHANGELOG.md#160--2026-08-14--canonical-implementation-and-cross-platform-containment"
+      ],
+      "status": "VERIFIED"
+    },
+    "exercise_assurance_operational": {
+      "closure_item": 3,
+      "owner": "Executive Sponsor + Internal Audit",
+      "verification": [
+        "Performer named and COI-screened against EA-COI-1..6",
+        "Holds the assessment key",
+        "Sealed inject commitment format agreed and signable",
+        "EA-6 reporting line to Executive Sponsor and Audit Committee confirmed in writing",
+        "Permissions limited to the six in 00-shared/18 sec 19.3 and nothing else",
+        "Internal Audit and Executive Sponsor signatures pass aegis-purple verify-gate-attestation"
+      ],
+      "attestation_template": "purple-team/config/exercise_assurance_attestation.template.json",
+      "attestation_roles": ["internal_audit", "executive_sponsor"],
+      "status": "PENDING"
+    },
+    "key_custody_verified": {
+      "closure_item": 2,
+      "closure_ref": "R-10",
+      "owner": "White + CISO",
+      "verification": [
+        "Authorization key in a White-controlled HSM or secret manager, never on a workstation",
+        "IAM policy denying Red identities VERIFIED by attempting access as Red and being denied",
+        "Evidence key SPLIT from the authorization key (trust-model migration step 1)",
+        "Rotation and recovery documented AND exercised once",
+        "Emergency revocation tested end to end",
+        "Key use logged to a store its holders cannot alter",
+        "White and CISO signatures pass aegis-purple verify-gate-attestation"
+      ],
+      "attestation_template": "purple-team/config/key_custody_attestation.template.json",
+      "attestation_roles": ["white", "ciso"],
+      "status": "PENDING"
+    },
+    "containment_verified_all_supported_platforms": {
+      "closure_item": 4,
+      "closure_ref": "R-6",
+      "owner": "Red Lead",
+      "verification": [
+        "test_source_link_escape_is_rejected PASSES on Linux CI",
+        "Same test PASSES on Windows with the required privilege configuration",
+        "CI treats a SKIP as a FAILURE, not a pass"
+      ],
+      "evidence": [
+        "red-team/tests/test_checks.py::CheckTests::test_source_link_escape_is_rejected",
+        "tools/ci_unittest_gate.py --forbid-skips",
+        ".github/workflows/engineering-integrity.yml (ubuntu-latest + windows-latest)"
+      ],
+      "status": "VERIFIED"
+    }
+  },
+
+  "state_model": {
+    "states": [
+      "DESIGN_COMPLETE",
+      "PREREQUISITES_PENDING",
+      "ASSESSMENT_READY",
+      "EXERCISE_AUTHORIZED",
+      "EXERCISE_COMPLETE",
+      "EVIDENCE_VERIFIED",
+      "ASSESSMENT_ISSUED"
+    ],
+    "current_state": "PREREQUISITES_PENDING",
+    "current_state_rationale": "Canonical selection and cross-platform containment are verified. Exercise Assurance staffing and production key custody still require independently verifiable external evidence.",
+    "rule": "No state may be skipped. Green test suites are not a substitute for a state transition.",
+    "transitions": {
+      "DESIGN_COMPLETE -> PREREQUISITES_PENDING": "Charters, RACI, gates, scorecards, and trust model ratified",
+      "PREREQUISITES_PENDING -> ASSESSMENT_READY": "ALL four required_gates verified with evidence",
+      "ASSESSMENT_READY -> EXERCISE_AUTHORIZED": "Signed RoE, safety assessment approved, contact roster live-tested, inject commitment published",
+      "EXERCISE_AUTHORIZED -> EXERCISE_COMPLETE": "Execution finished or terminated; cleanup verified by a non-operator",
+      "EXERCISE_COMPLETE -> EVIDENCE_VERIFIED": "Exercise Assurance validates evidence completeness and integrity; ledger verifies and seals",
+      "EVIDENCE_VERIFIED -> ASSESSMENT_ISSUED": "Scores computed against the frozen rubric and signed with the assessment key"
+    },
+    "regression_triggers": {
+      "to_PREREQUISITES_PENDING": [
+        "Any required gate ceases to hold",
+        "Signing key found outside its designated custody",
+        "Canonical implementation ambiguity reintroduced",
+        "Exercise Assurance performer unavailable or conflicted"
+      ]
+    }
+  },
+
+  "presentation_rules": [
+    "While status is NOT_ASSESSMENT_READY, exercises MAY run and diagnostic scores MAY be computed.",
+    "No assurance statement may be issued.",
+    "Every artifact produced in this state carries the marking TRAINING_OR_ENGINEERING_USE_ONLY.",
+    "A diagnostic score must never be forwarded to an auditor, regulator, customer, or board as assurance evidence.",
+    "Removing the marking requires a state transition, not an editorial decision."
+  ]
+}

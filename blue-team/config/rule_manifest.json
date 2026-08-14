@@ -1,0 +1,7 @@
+{
+  "algorithm": "sha256",
+  "files": {
+    "endpoint.json": "677fa9245839af689f54ea11ad4c37aabfa09d26fa79dd3ff4617e145d541a51",
+    "identity_network_cloud.json": "3be93a59e35afdff7471e95cb33540eab61db5cdf119c62c59290e0214e3bf62"
+  }
+}

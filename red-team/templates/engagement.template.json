@@ -1,0 +1,52 @@
+{
+  "_README": [
+    "Copy to <engagement>.json and fill. Spec: ../ARTIFACTS.md. Working sample: ../examples/engagement.json",
+    "",
+    "ANY change to targets, allowed_checks, or limits CHANGES THE FINGERPRINT and VOIDS the",
+    "existing authorization receipt. That is intended behaviour. Re-authorize.",
+    "",
+    "This file is the TECHNICAL scope. It is NOT the authorization.",
+    "Legal sign-off, privacy sign-off, the system-owner signature, emergency contacts, SOC",
+    "deconfliction, rollback plans, and insurance notification live in the RoE:",
+    "  ../../00-shared/04_rules_of_engagement_template.md",
+    "Aegis SECURITY.md says the same thing: the receipt is a technical guardrail, not a",
+    "substitute for legal authorization, change control, stakeholder notification, or an",
+    "emergency plan. Do not let this JSON become a substitute for the signatures.",
+    "",
+    "Remove the _README and _NOTES keys before use if your validator rejects unknown fields."
+  ],
+
+  "engagement_id": "EX-YYYY-NNN",
+  "owner": "<accountable system owner, a named human or team of record>",
+
+  "targets": [
+    { "kind": "path", "value": "." }
+  ],
+
+  "allowed_checks": [
+    "source.static"
+  ],
+
+  "limits": {
+    "max_requests": 10,
+    "max_concurrency": 2,
+    "requests_per_second": 2,
+    "timeout_seconds": 8,
+    "max_files": 20000,
+    "max_findings": 5000
+  },
+
+  "_NOTES": {
+    "targets": "ALLOW-LIST. No wildcards. Public addresses are DENIED unless the receipt explicitly opts in.",
+    "allowed_checks": "Must exist in the fixed built-in registry. Run 'aegis-rt list-checks'. No plugins, no shell.",
+    "limits": "These are BLAST-RADIUS CONTROLS, not performance tuning. Set them to the smallest values that let the engagement complete.",
+    "workflow": [
+      "1. aegis-rt validate <file>.json",
+      "2. aegis-rt plan <file>.json            -> capture the 64-char SCOPE FINGERPRINT",
+      "3. approval authority signs on THEIR machine (aegis-rt authorize ... --expires-at ...)",
+      "4. aegis-rt run <file>.json --trust-key authority.pub.pem --ack-scope <fingerprint>",
+      "   NEVER paste a fingerprint forward from an earlier plan -- that defeats the control",
+      "5. aegis-rt verify-ledger  ->  seal-ledger (by the approval authority)  ->  hand to White"
+    ]
+  }
+}

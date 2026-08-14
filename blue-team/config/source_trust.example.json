@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "sources": {
+    "edr": {"key_id": "edr-v1", "secret_env": "SENTINEL_BLUE_EDR_KEY"},
+    "identity": {"key_id": "identity-v1", "secret_env": "SENTINEL_BLUE_IDENTITY_KEY"},
+    "firewall": {"key_id": "firewall-v1", "secret_env": "SENTINEL_BLUE_FIREWALL_KEY"}
+  }
+}

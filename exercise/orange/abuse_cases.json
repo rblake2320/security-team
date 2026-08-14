@@ -1,0 +1,14 @@
+[
+  {
+    "abuse_case_id": "AC-IDOR-001",
+    "seeded_weakness": "API retrieves a record by identifier without enforcing project ownership",
+    "predicted_path": ["authenticate synthetic PROJECT-ALPHA identity", "request PROJECT-BRAVO record", "observe unauthorized record"],
+    "red_test_id": "TC-IDOR-001",
+    "blue_detection_id": "DET-CROSS-PROJECT-001",
+    "yellow_fix_id": "FIX-OBJECT-SCOPE-001",
+    "green_control_id": "CTRL-DB-PROJECT-SCOPE-001",
+    "retest_id": "RT-IDOR-001",
+    "expected_baseline": 200,
+    "expected_retest": 403
+  }
+]

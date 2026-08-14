@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "aegis.inject-opening.v2",
+  "title": "Inject commitment opening material (SECRET until reveal)",
+  "description": "The withheld half of the commit/reveal pair. Held by Exercise Assurance. Publishing any part of this before the reveal trigger destroys the hiding property and voids the exercise's blind-inject design.",
+  "spec": "00-shared/18_exercise_assurance.md",
+
+  "HANDLING": {
+    "classification": "SECRET UNTIL REVEAL",
+    "storage": "EA-controlled secret manager or sealed offline medium. Never in the exercise channel, never in the shared evidence store before reveal.",
+    "access": "Exercise Assurance only. Not White. Not any participant.",
+    "backup": "MANDATORY. Loss of opening_salt makes the commitment permanently unopenable, which is indistinguishable from refusal to reveal.",
+    "destruction": "Retained as evidence AFTER reveal (verification step 12). Do not destroy - it is what proves the commitment was honoured."
+  },
+
+  "type": "object",
+  "required": ["commitment_id", "opening_salt", "inject_package"],
+  "additionalProperties": false,
+  "properties": {
+    "commitment_id": { "type": "string", "description": "Links to the public commitment object." },
+    "opening_salt": {
+      "type": "string",
+      "description": "32 or 48 cryptographically random bytes, hex or base64. CSPRNG. NEVER REUSED across commitments.",
+      "minLength": 64
+    },
+    "inject_package": {
+      "type": "object",
+      "required": ["type", "exercise_id", "injects"],
+      "properties": {
+        "type":        { "const": "aegis.inject-package.v1" },
+        "exercise_id": { "type": "string" },
+        "injects": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "trigger", "type", "content", "assesses", "expected_correct_response"],
+            "properties": {
+              "id":                        { "type": "string" },
+              "trigger":                   { "type": "string" },
+              "type":                      { "type": "string" },
+              "content":                   { "type": "string" },
+              "assesses":                  { "type": "array", "items": { "type": "string" } },
+              "expected_correct_response": { "type": "string" },
+              "auto_fail_if":              { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "salt_generation": {
+    "source": "CSPRNG (os.urandom, /dev/urandom, or an HSM RNG)",
+    "length_bytes": [32, 48],
+    "reuse": "PROHIBITED. Maintain a salt registry so verification step 11 (salt has not appeared in another commitment) is answerable.",
+    "why_secret": "Randomness added to a hash defeats precomputation or enumeration ONLY when the attacker does not already know that randomness. A published nonce provides uniqueness, not hiding. Inject packages are short and structurally predictable, so an unhidden commitment is enumerable in practice."
+  }
+}

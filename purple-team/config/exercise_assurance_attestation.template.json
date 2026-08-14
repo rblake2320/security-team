@@ -1,0 +1,20 @@
+{
+  "schema": "aegis.purple.gate-attestation/1.0",
+  "gate_id": "exercise_assurance_operational",
+  "subject": "REPLACE_WITH_ASSESSMENT_CYCLE_AND_NAMED_PERFORMER",
+  "issued_at": "REPLACE_WITH_UTC_TIMESTAMP",
+  "expires_at": "REPLACE_WITH_UTC_TIMESTAMP_NO_MORE_THAN_90_DAYS_LATER",
+  "assertions": [
+    "assessment_key_custody_confirmed",
+    "coi_screen_ea_coi_1_through_6_passed",
+    "ea6_reporting_line_confirmed",
+    "performer_named",
+    "permissions_exactly_ea1_through_ea6",
+    "sealed_inject_format_signable"
+  ],
+  "evidence_sha256": ["REPLACE_WITH_LOWERCASE_SHA256"],
+  "signatures": [
+    {"key_id": "REPLACE_INTERNAL_AUDIT_KEY", "role": "internal_audit", "signature": "REPLACE_BASE64_ED25519_SIGNATURE"},
+    {"key_id": "REPLACE_EXECUTIVE_SPONSOR_KEY", "role": "executive_sponsor", "signature": "REPLACE_BASE64_ED25519_SIGNATURE"}
+  ]
+}

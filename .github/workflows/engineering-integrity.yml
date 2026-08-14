@@ -1,0 +1,54 @@
+name: engineering-integrity
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tools/requirements-ci.txt
+      - name: Install reviewed test dependencies
+        run: |
+          python -m pip install --disable-pip-version-check --require-hashes -r tools/requirements-runtime.txt
+          python -m pip install --disable-pip-version-check -r tools/requirements-ci.txt
+          python -m pip install --disable-pip-version-check --no-deps --no-build-isolation -e purple-team -e red-team
+      - name: Static and compilation gates
+        run: |
+          python -m ruff check purple-team/src purple-team/tests red-team/src red-team/tests blue-team/src blue-team/tests 00-shared/tools tools exercise
+          python -m compileall -q purple-team/src purple-team/tests red-team/src red-team/tests blue-team/src blue-team/tests 00-shared/tools tools exercise
+      - name: Runtime dependency vulnerability gate
+        run: python -m pip_audit -r tools/requirements-runtime.txt --disable-pip --progress-spinner off
+      - name: Shared cryptographic commitment tests
+        run: python 00-shared/tools/test_commitment.py
+      - name: CI separation guard
+        run: python -m unittest discover -s 00-shared/tools -p 'test_ci_integrity.py' -v
+      - name: Purple orchestration tests
+        run: python -m unittest discover -s purple-team/tests -v
+      - name: Disposable integrated rehearsal
+        run: python -m unittest discover -s exercise/tests -v
+      - name: Red boundary tests - skips forbidden in CI
+        run: python tools/ci_unittest_gate.py --source red-team/src --tests red-team/tests --forbid-skips
+      - name: Blue defensive-core tests
+        run: python tools/ci_unittest_gate.py --source blue-team/src --tests blue-team/tests
+      - name: Program consistency and honest readiness marking
+        run: |
+          python tools/verify_canonical_packages.py
+          python -m aegis_purple validate-program --readiness 00-shared/config/assessment_readiness.json --claims 00-shared/config/assurance_claims.json
+          python 00-shared/tools/claim_check.py --allow-not-ready
+          python tools/assert_current_hold.py

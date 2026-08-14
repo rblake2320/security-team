@@ -1,0 +1,21 @@
+{
+  "engagement_id": "local-lab-001",
+  "owner": "Security Engineering",
+  "targets": [
+    {
+      "kind": "path",
+      "value": "."
+    }
+  ],
+  "allowed_checks": [
+    "source.static"
+  ],
+  "limits": {
+    "max_requests": 10,
+    "max_concurrency": 2,
+    "requests_per_second": 2,
+    "timeout_seconds": 8,
+    "max_files": 20000,
+    "max_findings": 5000
+  }
+}

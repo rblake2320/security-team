@@ -1,0 +1,10 @@
+{
+  "schema": "exercise.audit-anchor-receipt/1.0",
+  "source": "sentinel-blue-engineering-rehearsal",
+  "audit_head": "f6d0d4a29c626abe540d9244af1c5e78cbd0d47dee52e5d287cbfdc2b21e553b",
+  "audit_entries": 1,
+  "previous_receipt_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "received_at": "2026-08-14T15:29:28.485938+00:00",
+  "key_id": "fixture-audit-2026",
+  "signature": "RbPZmamqbrziFOEOqrFHD5uAyz/5A8gKwQykILX62KSa3AqvUO10waf9aL1bSo8wyCSdU8hZqmTDcnmr6g3OBQ=="
+}

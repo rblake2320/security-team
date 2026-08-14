@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "aegis.inject-commitment.v2",
+  "title": "Exercise Assurance inject commitment (public object)",
+  "description": "Public, signed commitment to a sealed inject package. A hash commitment requires BINDING (EA cannot substitute a different package after committing) and HIDING (White cannot enumerate likely packages before reveal). Hiding comes from secret randomness withheld until reveal - see aegis.inject-opening.v2.",
+  "authority": "Program owner correction, 2026-08-14.",
+  "spec": "00-shared/18_exercise_assurance.md",
+
+  "SUPERSEDES": {
+    "version": "aegis.inject-commitment.v1",
+    "status": "DEPRECATED - DOES NOT PROVIDE PACKAGE HIDING. Do not use.",
+    "defects": [
+      "The nonce was published in the signed public object, so it could provide uniqueness but no hiding. Randomness only defeats enumeration when the attacker does not already know it.",
+      "WORSE: the nonce was not included in the digest preimage at all. package_digest was SHA-384 over the canonical package only, so the nonce contributed nothing to binding either.",
+      "The v1 field description asserted that the nonce 'prevents a low-entropy package being brute-forced from its digest' - a security property the construction did not implement.",
+      "Inject packages are short and structurally predictable, so an unhidden commitment is enumerable in practice, not only in theory."
+    ],
+    "v1_ever_used_in_production": false,
+    "reason_not_used": "Program state is PREREQUISITES_PENDING / NOT_ASSESSMENT_READY; no exercise has been authorized."
+  },
+
+  "commitment_construction": {
+    "scheme": "commit / reveal",
+    "formula": "c = H(domain || canonical_package || opening_salt)",
+    "hash": "SHA-384",
+    "domain": "aegis.inject-commitment.v2",
+    "canonicalization": "JCS (RFC 8785)",
+    "encoding_note": "Use an unambiguous LENGTH-FRAMED preimage, never raw concatenation. Raw concatenation admits boundary-shifting between adjacent fields.",
+    "preimage": [
+      "u64be(len(domain))            || domain",
+      "u64be(len(canonical_package)) || canonical_package",
+      "u64be(len(opening_salt))      || opening_salt"
+    ],
+    "length_encoding": "8-byte big-endian unsigned integer, byte length of the UTF-8 / raw octets that follow",
+    "comparison": "Constant-time compare on digest verification.",
+    "at_commitment": "Publish this signed object. Withhold the package AND the opening_salt.",
+    "at_reveal": "EA publishes the package and the opening_salt; White recomputes c and compares."
+  },
+
+  "field_disposition": {
+    "commitment_id":        "PUBLISHED  - public uniqueness and correlation",
+    "commitment_digest":    "PUBLISHED  - binds the package and the secret opening value",
+    "public_nonce":         "OPTIONAL   - replay/correlation uniqueness ONLY. Provides NO hiding. Never rely on it for hiding.",
+    "opening_salt":         "WITHHELD   - prevents enumeration of possible inject packages",
+    "inject_package":       "WITHHELD   - the content itself",
+    "opening_salt + package": "REVEALED at reveal - opens and verifies the commitment"
+  },
+
+  "type": "object",
+  "required": [
+    "type", "commitment_id", "exercise_id", "commitment_algorithm", "commitment_digest",
+    "canonicalization", "package_schema", "package_version", "created_at", "valid_from",
+    "reveal_deadline", "exercise_assurance_key_id", "previous_commitment", "signature"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "type":                 { "const": "aegis.inject-commitment.v2", "description": "Domain separation. Inside the signed payload." },
+    "commitment_id":        { "type": "string", "pattern": "^IC-[A-Za-z0-9-]+-[0-9]{3}$" },
+    "exercise_id":          { "type": "string" },
+    "commitment_algorithm": { "const": "SHA-384" },
+    "commitment_digest":    { "type": "string", "pattern": "^[0-9a-f]{96}$", "description": "SHA-384 over the LENGTH-FRAMED preimage (domain || canonical_package || opening_salt)." },
+    "canonicalization":     { "const": "JCS" },
+    "package_schema":       { "const": "aegis.inject-package.v1" },
+    "package_version":      { "type": "integer", "minimum": 1 },
+    "created_at":           { "type": "string", "format": "date-time" },
+    "valid_from":           { "type": "string", "format": "date-time" },
+    "reveal_deadline":      { "type": "string", "format": "date-time", "description": "After this, an unrevealed package is VOID, not pending." },
+    "exercise_assurance_key_id": { "type": "string" },
+    "public_nonce":         { "type": "string", "description": "OPTIONAL. Replay/correlation uniqueness only. NOT a hiding mechanism." },
+    "previous_commitment":  { "oneOf": [{ "type": "null" }, { "type": "string" }], "description": "commitment_id of the superseded commitment. Append-only chain." },
+    "supersession_reason":  { "type": "string", "description": "REQUIRED whenever previous_commitment is non-null." },
+    "signature":            { "type": "string", "description": "EA signature over the JCS canonicalization of every public field except 'signature'." }
+  },
+
+  "verification_sequence": [
+    "1.  Validate the public commitment schema.",
+    "2.  Verify the EA signature over every public field except 'signature'.",
+    "3.  Confirm type, exercise_id, key ID, algorithm, and validity window.",
+    "4.  Confirm the commitment was published BEFORE exercise execution.",
+    "5.  Confirm the opening uses the expected package schema (aegis.inject-package.v1).",
+    "6.  Canonicalize the revealed package using the declared algorithm (JCS).",
+    "7.  Reconstruct the length-framed preimage.",
+    "8.  Recompute the digest and CONSTANT-TIME compare.",
+    "9.  Validate inject identifiers, count, ordering rules, and timestamps.",
+    "10. Validate the supersession chain.",
+    "11. Confirm the opening_salt has not appeared in any other commitment.",
+    "12. Preserve the commitment, opening, package, and verification result as evidence."
+  ],
+
+  "operational_requirements": [
+    "opening_salt: 32 or 48 bytes from a CSPRNG. Never reused across commitments. Requires a salt registry to satisfy verification step 11.",
+    "EA must BACK UP the opening material. Losing the salt makes the commitment permanently unopenable - an availability failure that looks identical to refusal to reveal.",
+    "A changed package requires a NEW signed commitment with an explicit supersession_reason. Never overwrite. Both remain published and chained.",
+    "A supersession created after exercise start is itself a finding, reported under EA-6.",
+    "Any verification failure invalidates the inject package and is reported under EA-6."
+  ]
+}

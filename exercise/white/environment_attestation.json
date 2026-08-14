@@ -1,0 +1,24 @@
+{
+  "schema": "exercise.environment-attestation/2.0",
+  "exercise_id": "EX-2026-001",
+  "environment": "TEST_ONLY",
+  "WARNING": "FIXTURE attestation for ENGINEERING_REHEARSAL only. Not signed by a production authority. Formal mode refuses it.",
+  "attested_by": "fixture-white-2026",
+  "attested_at": "2026-08-14T00:00:00+00:00",
+  "environment_class": "non_production_disposable",
+  "allowed_test_ids": [
+    "TC-IDOR-001"
+  ],
+  "synthetic_data_only": true,
+  "network_egress": "blocked",
+  "destructive_actions_permitted": false,
+  "rate_limited": true,
+  "rollback_tested": true,
+  "emergency_stop": "white_controlled",
+  "deconfliction_procedure": [
+    "deconflict://IR-DECON-001"
+  ],
+  "evidence_capture": "append_only",
+  "authorization_refusal_enforced": true,
+  "signature": "7U08T4XUDZxGJ4fm8Tzd1t8XSNCb91DpKl2SUVOFiKBM8YX1TU0oJzXoU80hnwdc3JBZo6VAfyJpb76FhaazBA=="
+}

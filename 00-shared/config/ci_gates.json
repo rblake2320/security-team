@@ -1,0 +1,97 @@
+{
+  "schema": "program.ci-gates/1.0",
+  "purpose": "SINGLE SOURCE OF TRUTH for the engineering gate list. The local runner and the GitHub workflow both derive from this file; a drift guard asserts the workflow covers every gate. Two hand-maintained gate lists WILL diverge.",
+  "engineering_gates": [
+    {
+      "id": "repo-hygiene",
+      "name": "repository hygiene + CI reachability",
+      "kind": "unittest",
+      "path": "00-shared/tools",
+      "pattern": "test_repo_hygiene.py"
+    },
+    {
+      "id": "ci-separation",
+      "name": "CI separation guard",
+      "kind": "unittest",
+      "path": "00-shared/tools",
+      "pattern": "test_ci_integrity.py"
+    },
+    {
+      "id": "gate-drift",
+      "name": "CI gate-manifest drift guard",
+      "kind": "unittest",
+      "path": "00-shared/tools",
+      "pattern": "test_gate_manifest.py"
+    },
+    {
+      "id": "commitment",
+      "name": "commitment falsification tests",
+      "kind": "unittest",
+      "path": "00-shared/tools",
+      "pattern": "test_commitment.py"
+    },
+    {
+      "id": "exercise",
+      "name": "exercise harness tests",
+      "kind": "unittest",
+      "path": "exercise/tests",
+      "pattern": "test_*.py"
+    },
+    {
+      "id": "purple",
+      "name": "purple-team tests",
+      "kind": "unittest",
+      "path": "purple-team/tests",
+      "pattern": "test_*.py",
+      "pythonpath": "purple-team/src"
+    },
+    {
+      "id": "red",
+      "name": "red-team tests",
+      "kind": "unittest",
+      "path": "red-team/tests",
+      "pattern": "test_*.py",
+      "pythonpath": "red-team/src"
+    },
+    {
+      "id": "blue",
+      "name": "blue-team tests",
+      "kind": "unittest",
+      "path": "blue-team/tests",
+      "pattern": "test_*.py",
+      "pythonpath": "blue-team/src"
+    },
+    {
+      "id": "claims",
+      "name": "claim gate (hold permitted)",
+      "kind": "command",
+      "argv": [
+        "00-shared/tools/claim_check.py",
+        "--allow-not-ready"
+      ]
+    },
+    {
+      "id": "links",
+      "name": "markdown link integrity",
+      "kind": "command",
+      "argv": [
+        "00-shared/tools/check_links.py"
+      ]
+    }
+  ],
+  "assurance_gates": [
+    {
+      "id": "readiness",
+      "name": "readiness gate (fails closed)",
+      "kind": "command",
+      "argv": [
+        "00-shared/tools/claim_check.py"
+      ]
+    }
+  ],
+  "rules": [
+    "Adding a gate here without adding it to the root workflow fails test_gate_manifest.py.",
+    "Engineering gates may pass under an explicit readiness hold.",
+    "Assurance gates must fail closed while any readiness gate is false."
+  ]
+}

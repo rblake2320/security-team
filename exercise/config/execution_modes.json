@@ -1,0 +1,28 @@
+{
+  "schema": "exercise.execution-modes/1.0",
+  "authority": "Program owner decision, 2026-08-14",
+  "modes": {
+    "ENGINEERING_REHEARSAL": {
+      "exercise_type": "ENGINEERING_REHEARSAL",
+      "assessment_state": "PREREQUISITES_PENDING",
+      "assurance_statement_allowed": false,
+      "result_marking": "TRAINING_OR_ENGINEERING_USE_ONLY",
+      "requires_all_readiness_gates": false,
+      "exercise_assurance_required": false,
+      "signed_authorization_required": true,
+      "independent_scoring_required": false,
+      "note": "Usable now. Failures improve code and procedures; scores cannot be presented as formal assurance."
+    },
+    "FORMAL_INTEGRATED_ASSESSMENT": {
+      "exercise_type": "FORMAL_INTEGRATED_ASSESSMENT",
+      "assessment_state": "ASSESSMENT_READY",
+      "assurance_statement_allowed": true,
+      "result_marking": "ASSESSMENT_EVIDENCE",
+      "requires_all_readiness_gates": true,
+      "exercise_assurance_required": true,
+      "signed_authorization_required": true,
+      "independent_scoring_required": true,
+      "note": "Enabled only after all four readiness gates pass. Refused by preflight until then."
+    }
+  }
+}

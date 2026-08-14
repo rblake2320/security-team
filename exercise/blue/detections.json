@@ -1,0 +1,10 @@
+[
+  {
+    "detection_id": "DET-CROSS-PROJECT-001",
+    "test_case_id": "TC-IDOR-001",
+    "condition": {"event_type": "record.read", "cross_project": true},
+    "severity": "high",
+    "response": "disable synthetic session and open rehearsal case",
+    "automatic_containment": false
+  }
+]

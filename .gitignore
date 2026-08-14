@@ -1,0 +1,48 @@
+# Purple team — version control hygiene
+#
+# ACTION CONTEXT: this directory was entirely UNTRACKED as of 2026-08-14. Before it
+# enters version control, the following must never be committed.
+
+# ---------------------------------------------------------------------------
+# SECRETS — fixture private keys are TEST_ONLY but must never enter git history.
+# Guarded by 00-shared/tools/test_repo_hygiene.py (falsification test).
+# ---------------------------------------------------------------------------
+**/_fixture_private_keys.json
+**/*.pem
+**/*.key
+**/authority.pem
+**/*_private*.json
+
+# Live opening material: secret until reveal. Committing it destroys commitment hiding.
+exercise/white/_test_attestation.json
+**/opening_material/
+**/*.opening.json
+
+# ---------------------------------------------------------------------------
+# RUNTIME / EVIDENCE — regenerated, and nonce ledgers are machine-local state
+# ---------------------------------------------------------------------------
+exercise/evidence/clearance.json
+exercise/evidence/used_nonces.json
+exercise/evidence/_test_*.json
+**/runtime/
+*.db
+*.db-wal
+*.db-shm
+
+# ---------------------------------------------------------------------------
+# BUILD ARTIFACTS
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# ---------------------------------------------------------------------------
+# Temporary files created by tests
+# ---------------------------------------------------------------------------
+**/_tmp_*.json
+**/*.tmp

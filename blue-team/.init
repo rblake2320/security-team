@@ -1,0 +1,162 @@
+# .init — machine-readable team manifest (YAML)
+# Read this to bootstrap as, or route work to, the Blue Team.
+# Authoritative prose lives in CHARTER.md; this file must not contradict it.
+# NOTE: unlike the other five teams, this folder is RUNNABLE CODE (Sentinel Blue).
+init_version: "1.0"
+schema_owner: "00-shared/02_org_structure_and_raci.md"
+
+team:
+  id: blue
+  name: "Blue Team"
+  color: "#3b82f6"
+  folder: blue-team
+  function: "Defensive operations — monitoring, triage, investigation, containment, recovery"
+  mission: >
+    Know the environment, maintain visibility, detect material adversary behavior,
+    investigate with evidence, contain proportionately, recover safely, and
+    continuously improve — operating the defense every day against a real
+    adversary rather than a plan.
+  lead_role: "Blue Team Lead / SOC Manager"
+  reports_to: "Director, Security Operations"
+  peer_to: "Purple   # NOT subordinate — Purple validates Blue's detections and must not manage the team it grades"
+  dedicated_or_virtual:
+    P1: "MSSP + 0.5 FTE internal duty lead (the internal role is non-negotiable)"
+    P2: "dedicated — 4.0-6.0 FTE business hours + MSSP after hours"
+    P3: "dedicated — 10-20 FTE across shifts"
+
+implementation:
+  name: "Sentinel Blue"
+  language: python
+  entrypoint: "python -m blue_team.cli"
+  source: src/blue_team/
+  tests: tests/
+  test_count: 38
+  test_status: passing
+  test_verified: "2026-08-14"
+  test_command: 'PYTHONPATH=src python -m unittest discover -s tests'
+  modules: [canonical, models, store, detection, coverage, health, response, source_auth, assurance, errors, cli]
+  platform_boundary: >
+    NEVER performs containment, account disablement, process termination, or
+    blocking. It emits response PLANS requiring documented approval. Do not build
+    around this boundary.
+
+files:
+  charter: CHARTER.md
+  playbook: PLAYBOOK.md
+  artifacts: ARTIFACTS.md
+  ai_agent: AI_AGENT.md
+  changelog: CHANGELOG.md
+  readme: README.md
+  security: SECURITY.md
+  docs:
+    architecture: docs/ARCHITECTURE.md
+    operating_model: docs/OPERATING_MODEL.md
+    threat_model: docs/THREAT_MODEL.md
+    incident_response: docs/INCIDENT_RESPONSE.md
+    detection_engineering: docs/DETECTION_ENGINEERING.md
+    control_matrix: docs/PROGRAM_CONTROL_MATRIX.md
+    adversarial_review: docs/ADVERSARIAL_REVIEW.md
+    deployment_checklist: docs/DEPLOYMENT_CHECKLIST.md
+    references: docs/REFERENCES.md
+  config:
+    coverage_target: config/coverage_target.json     # SINGLE SOURCE OF TRUTH for the M-1 denominator
+    rule_manifest: config/rule_manifest.json
+    sensor_policy: config/sensor_policy.json
+    source_trust_example: config/source_trust.example.json
+
+owns:
+  workflow_stages: []                                # Blue runs continuously, not stage-gated
+  contributes_to_stages: [8, 9, 10, 16]
+  gates_enforced:
+    - "B14 — no incident closed without scope, cause-or-declared-unknown, containment evidence, recovery validation, lessons, and follow-up"
+    - "Deconfliction answered within 5 minutes; ambiguity is treated as REAL"
+    - "Two approvers plus written rollback for high-risk containment (C-8)"
+  artifacts: [Alert, Case, "Incident record", "Investigation timeline", "Containment approval", "Recovery validation", "Hunt record", "Sensor-health report", "Declared-coverage report", "Audit chain export"]
+  metrics: [M-5, M-6, M-10, "triage correctness (six-stage stage 4)", "deconfliction SLA"]
+  headline_metrics:
+    - "triage correctness — an alert that fires and is misclassified is a detection failure nobody counts"
+  six_stage_ownership:
+    green_owns: [prevented, logged, alerted]
+    blue_owns: [investigated, contained, reported]
+
+authority:
+  decides:
+    - "Alert disposition and severity at triage"
+    - "Declare an incident"
+    - "Incident command decisions during a live incident"
+    - "Low-risk reversible containment (with record)"
+    - "Whether observed activity is real during an exercise — DEFAULT TO REAL when uncertain"
+    - "Call a stop on an exercise (any member, no justification required)"
+  recommends:
+    - "High-risk containment — two approvers + rollback required"
+    - "Detection content changes — to Green"
+  denied:
+    - "Resuming an exercise (White only)"
+    - "Authoring or deploying production detection content (C-1)"
+    - "Autonomous containment without approval"
+    - "Offensive or emulation tooling"
+    - "Accepting risk"
+
+separation_of_duties:
+  - "Blue's alert sampling checks TRIAGE quality; Purple's validation checks DETECTION efficacy — neither substitutes for the other (C-2)"
+  - "SoD-11 — exports the audit-chain head hash to White as the external anchor (C-9)"
+
+boundaries:
+  # Reconciled 2026-08-14 — see 00-shared/14_blue_team_integration_review.md
+  C-1: "Green authors/deploys detections. Blue provides operational feedback."
+  C-2: "Blue samples triage quality; Purple validates detection efficacy."
+  C-3: "Green owns scheduled restore drills. Blue owns incident-time recovery."
+  C-4: "Green owns the pipeline. Blue owns noticing it is broken."
+  C-5: "Blue triages exposure. Yellow remediates."
+  C-6: "Blue hunts for what IS there. Purple emulates what COULD happen. Hunt findings feed Purple."
+  C-7: "Blue reports DECLARED coverage. Purple reports VALIDATED coverage. The gap is the interesting number."
+  C-8: "Blue's two-approver rule is the standard everywhere, including Green's SOAR."
+  C-9: "Blue's audit chain head hash exports to White's evidence manifest."
+
+depends_on:
+  green: "Deployed detection content, telemetry, hardening state, runbooks"
+  white: "Exercise notification, registered indicators, deconfliction answers"
+  cti: "Threat intelligence"
+  yellow: "Remediation of exposure"
+
+provides_to:
+  green: "False positives, false negatives, consumer-side telemetry gaps"
+  purple: "Six-stage outcomes 4-6; real incidents as scenario candidates (within 30 days)"
+  white: "Audit-chain head hash; containment and recovery evidence; deconfliction participation"
+  orange: "Hunt findings whose root cause is a design decision"
+
+integrations:
+  why_engine:
+    owns_triggers: [W-2]                             # incident closure
+    recall_before: "R-2 — triage of a non-obvious alert"
+    publish_target: outbox
+    sensitivity_floor: internal
+  soul_system:
+    markers: ["SOUL-PAIN:"]
+    emits_on: ["rollbacks that did not work as documented"]
+    never_emit: ["event content", "PII/PHI/CUI", "credentials"]
+
+staffing:
+  minimum: { P1: 0.5, P2: 4.0, P3: 10.0 }
+  mature:  { P1: 1.0, P2: 10.0, P3: 30.0 }
+
+adversarial_review:
+  status: COMPLETE
+  artifact: docs/ADVERSARIAL_REVIEW.md
+  note: "The only team with one. It is the model the other five now copy."
+
+bootstrap:
+  - "python -m blue_team.cli init --db runtime/blue.db"
+  - "PYTHONPATH=src python -m unittest discover -s tests   # expect 38 passing"
+  - "python -m blue_team.cli validate                       # config integrity"
+  - "Run health FIRST every shift — a silent sensor means every dependent detection is down"
+  - "Confirm the deconfliction channel is live and you know who answers it"
+  - "NEVER stand the SOC down during an exercise window — operating normally IS the measurement"
+  - "Export the audit-chain head hash to White monthly and at every exercise close"
+
+blind_phase_rule: >
+  Collaborative by default. A blind phase is a WHITE-AUTHORIZED TEST MODE requiring a signed
+  objective, named blinded participants, enumerated withheld information, a bounded window, a
+  declassification trigger, named safety observers, and live deconfliction. It EXPIRES
+  AUTOMATICALLY at 'end' and must not continue merely because nobody ended it. Extension
+  requires a new signature. Schema: 00-shared/04_rules_of_engagement_template.md sec 5.10.1

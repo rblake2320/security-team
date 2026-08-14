@@ -1,0 +1,26 @@
+{
+  "schema": "aegis.purple.exercise-plan/1.0",
+  "exercise_id": "EX-2026-001",
+  "version": 1,
+  "title": "Synthetic identity detection validation",
+  "owner": "purple-lead",
+  "environment": "lab",
+  "expires_at": "2026-12-31T23:59:59Z",
+  "authorization_receipt_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "readiness_snapshot_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "rubric_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "role_trust_sha256": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "test_cases": [
+    {
+      "test_case_id": "TC-2026-001",
+      "technique": "T1110.003",
+      "procedure_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "expected_telemetry": ["identity.signin.failure"],
+      "expected_detections": ["BT-IDENTITY-001"],
+      "safety_class": "low",
+      "rollback_verified": true,
+      "observe_only": false
+    }
+  ],
+  "stop_conditions": ["Any event outside the synthetic tenant"]
+}

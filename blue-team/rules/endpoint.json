@@ -1,0 +1,163 @@
+[
+  {
+    "id": "BT-ENDPOINT-001",
+    "title": "Security control disabled",
+    "severity": "critical",
+    "enabled": true,
+    "allow_suppression": false,
+    "suppression_seconds": 0,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "security_control_changed"},
+      {"field": "attributes.state", "operator": "in", "value": ["disabled", "off", "stopped"]}
+    ],
+    "techniques": ["T1562.001"],
+    "tactics": ["Stealth", "Defense Impairment"],
+    "rationale": "Security-control impairment creates a direct telemetry and prevention blind spot."
+  },
+  {
+    "id": "BT-ENDPOINT-002",
+    "title": "Audit log cleared",
+    "severity": "critical",
+    "enabled": true,
+    "allow_suppression": false,
+    "suppression_seconds": 0,
+    "conditions": [{"field": "event_type", "operator": "eq", "value": "audit_log_cleared"}],
+    "techniques": ["T1070.001"],
+    "tactics": ["Defense Impairment"],
+    "rationale": "Audit-log clearing is high-confidence evidence destruction and must never be suppressed."
+  },
+  {
+    "id": "BT-ENDPOINT-003",
+    "title": "Encoded PowerShell execution",
+    "severity": "high",
+    "enabled": true,
+    "suppression_seconds": 300,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "process_start"},
+      {"field": "attributes.image", "operator": "endswith", "value": "powershell.exe"},
+      {"field": "attributes.command_line", "operator": "contains", "value": "-enc"}
+    ],
+    "techniques": ["T1059.001"],
+    "tactics": ["Execution"],
+    "rationale": "Encoded PowerShell is frequently used to obscure script content; tune known management tooling explicitly."
+  },
+  {
+    "id": "BT-ENDPOINT-004",
+    "title": "Suspicious LSASS process access",
+    "severity": "high",
+    "enabled": true,
+    "suppression_seconds": 300,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "process_access"},
+      {"field": "attributes.target_image", "operator": "endswith", "value": "lsass.exe"},
+      {"field": "attributes.credential_access", "operator": "eq", "value": true}
+    ],
+    "techniques": ["T1003.001"],
+    "tactics": ["Credential Access"],
+    "rationale": "Unapproved credential-oriented LSASS access may indicate credential dumping."
+  },
+  {
+    "id": "BT-ENDPOINT-005",
+    "title": "Service persistence from user-writable path",
+    "severity": "high",
+    "enabled": true,
+    "suppression_seconds": 600,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "service_installed"},
+      {"field": "attributes.user_writable_path", "operator": "eq", "value": true}
+    ],
+    "techniques": ["T1543.003"],
+    "tactics": ["Persistence", "Privilege Escalation"],
+    "rationale": "Services executing from a user-writable location have a high persistence and privilege-abuse risk."
+  },
+  {
+    "id": "BT-ENDPOINT-006",
+    "title": "Hidden scheduled task created",
+    "severity": "medium",
+    "enabled": true,
+    "suppression_seconds": 600,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "scheduled_task_created"},
+      {"field": "attributes.hidden", "operator": "eq", "value": true}
+    ],
+    "techniques": ["T1053.005"],
+    "tactics": ["Persistence", "Privilege Escalation"],
+    "rationale": "Hidden scheduled tasks require immediate validation against an approved change."
+  },
+  {
+    "id": "BT-ENDPOINT-007",
+    "title": "Potential ransomware file-change burst",
+    "severity": "critical",
+    "enabled": true,
+    "allow_suppression": false,
+    "suppression_seconds": 0,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "file_modified"},
+      {"field": "attributes.ransomware_pattern", "operator": "eq", "value": true}
+    ],
+    "threshold": {"count": 50, "within_seconds": 120, "group_by": ["host"]},
+    "techniques": ["T1486"],
+    "tactics": ["Impact"],
+    "rationale": "Rapid encryption-like modification across many files requires immediate ransomware triage."
+  },
+  {
+    "id": "BT-ENDPOINT-008",
+    "title": "Office application spawned a command interpreter",
+    "severity": "high",
+    "enabled": true,
+    "suppression_seconds": 300,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "process_start"},
+      {"field": "attributes.parent_image", "operator": "in", "value": ["winword.exe", "excel.exe", "powerpnt.exe", "outlook.exe"]},
+      {"field": "attributes.image", "operator": "in", "value": ["cmd.exe", "powershell.exe", "wscript.exe", "cscript.exe", "mshta.exe"]}
+    ],
+    "techniques": ["T1204.002"],
+    "tactics": ["Execution"],
+    "rationale": "A document or mail client spawning an interpreter is a strong user-execution signal."
+  },
+  {
+    "id": "BT-ENDPOINT-009",
+    "title": "Suspicious account discovery command",
+    "severity": "medium",
+    "enabled": true,
+    "suppression_seconds": 300,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "process_start"},
+      {"field": "attributes.discovery_command", "operator": "eq", "value": true},
+      {"field": "attributes.approved_admin_activity", "operator": "eq", "value": false}
+    ],
+    "techniques": ["T1087"],
+    "tactics": ["Discovery"],
+    "rationale": "Unapproved account-enumeration commands can expose early post-compromise discovery."
+  },
+  {
+    "id": "BT-ENDPOINT-010",
+    "title": "Sensitive-file staging archive created",
+    "severity": "high",
+    "enabled": true,
+    "suppression_seconds": 600,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "archive_created"},
+      {"field": "attributes.sensitive_file_count", "operator": "gte", "value": 10},
+      {"field": "attributes.approved_activity", "operator": "eq", "value": false}
+    ],
+    "techniques": ["T1560.001"],
+    "tactics": ["Collection"],
+    "rationale": "Unapproved archiving of multiple sensitive files may represent staging before exfiltration."
+  },
+  {
+    "id": "BT-BACKUP-001",
+    "title": "System recovery protection reduced",
+    "severity": "critical",
+    "enabled": true,
+    "allow_suppression": false,
+    "suppression_seconds": 0,
+    "conditions": [
+      {"field": "event_type", "operator": "eq", "value": "recovery_control_changed"},
+      {"field": "attributes.protection_reduced", "operator": "eq", "value": true}
+    ],
+    "techniques": ["T1490"],
+    "tactics": ["Impact"],
+    "rationale": "Backup, snapshot, or recovery impairment can enable irreversible impact and must never be suppressed."
+  }
+]

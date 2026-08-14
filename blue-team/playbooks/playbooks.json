@@ -1,0 +1,38 @@
+{
+  "defense_impairment": {
+    "steps": [
+      {"action": "preserve_evidence", "description": "Capture control state, actor, change record, and adjacent telemetry."},
+      {"action": "validate_change", "description": "Confirm whether the change is authorized and identify the accountable owner."},
+      {"action": "isolate_host", "description": "Recommend host isolation if malicious activity is corroborated.", "rollback": "Release isolation after clean validation and owner approval."},
+      {"action": "restore_control", "description": "Restore the impaired security control through authorized administration.", "approval_required": true, "rollback": "Return to the last approved control configuration."},
+      {"action": "hunt_related", "description": "Hunt for the same actor, command, indicator, and control change across the estate."}
+    ]
+  },
+  "identity_compromise": {
+    "steps": [
+      {"action": "preserve_evidence", "description": "Preserve sign-in, token, endpoint, mail, and administrative audit evidence."},
+      {"action": "revoke_sessions", "description": "Recommend revocation of active sessions and refresh tokens.", "rollback": "Re-authenticate verified user sessions."},
+      {"action": "disable_account", "description": "Recommend temporary account disablement if active misuse is corroborated.", "rollback": "Restore only after identity proofing and credential reset."},
+      {"action": "reset_credentials", "description": "Reset credentials and re-register phishing-resistant MFA.", "approval_required": true},
+      {"action": "review_privilege", "description": "Review group membership, delegated access, OAuth grants, and mailbox rules."}
+    ]
+  },
+  "ransomware": {
+    "steps": [
+      {"action": "preserve_evidence", "description": "Record affected hosts, identities, process tree, files, shares, and timestamps."},
+      {"action": "isolate_host", "description": "Recommend isolation of corroborated affected hosts.", "rollback": "Release isolation only after eradication validation."},
+      {"action": "protect_backups", "description": "Validate immutable backup availability and restrict destructive backup administration.", "approval_required": true},
+      {"action": "scope_impact", "description": "Measure affected assets, shares, identities, and recovery dependencies."},
+      {"action": "restore_system", "description": "Recommend recovery from verified clean backups after eradication.", "rollback": "Return to preserved recovery snapshot if validation fails."}
+    ]
+  },
+  "exfiltration": {
+    "steps": [
+      {"action": "preserve_evidence", "description": "Preserve flow, proxy, DNS, endpoint, identity, and data-access telemetry."},
+      {"action": "block_indicator", "description": "Recommend blocking a confirmed malicious destination.", "rollback": "Remove block after false-positive confirmation."},
+      {"action": "isolate_host", "description": "Recommend host isolation if transfer is active and unauthorized.", "rollback": "Release after scope and eradication validation."},
+      {"action": "classify_data", "description": "Determine data type, owner, regulatory impact, and notification obligations."},
+      {"action": "hunt_related", "description": "Hunt for matching destinations, tools, identities, and staging behavior."}
+    ]
+  }
+}
