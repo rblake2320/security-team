@@ -5,11 +5,13 @@ import json
 import sys
 from pathlib import Path
 
+import hashlib
+
 from .assurance import load_object, validate_program
 from .attestation import verify_gate_attestation
 from .authority import validate_role_trust_registry, verify_transition_envelope
 from .canonical import load_json_bounded, sha256
-from .errors import PurpleError
+from .errors import ConfigurationError, PurpleError
 from .models import ExercisePlan
 from .scoring import score_assessment
 from .store import ExerciseStore
@@ -41,11 +43,61 @@ def parser() -> argparse.ArgumentParser:
     score = commands.add_parser("score")
     score.add_argument("--scorecard", type=Path, required=True)
     score.add_argument("--input", type=Path, required=True)
-    score.add_argument("--assessment-ready", action="store_true")
+    score.add_argument("--readiness", type=Path,
+
+                       help="authoritative assessment_readiness.json; readiness is DERIVED from it")
+
+    score.add_argument("--claims", type=Path,
+
+                       help="authoritative assurance_claims.json")
     attestation = commands.add_parser("verify-gate-attestation")
     attestation.add_argument("--attestation", type=Path, required=True)
     attestation.add_argument("--trust-registry", type=Path, required=True)
     return root
+
+
+CANONICAL_READINESS = "00-shared/config/assessment_readiness.json"
+CANONICAL_CLAIMS = "00-shared/config/assurance_claims.json"
+
+
+def _program_root() -> Path:
+    """Repository root, derived from this package's own location.
+
+    AUD-01b: the first fix replaced a caller-controlled BOOLEAN with a
+    caller-controlled PATH, which is the same defect wearing a different hat. A
+    self-consistent forged registry passed validate_program and produced
+    ASSESSMENT_CANDIDATE. Authority must come from the program's own artifacts.
+    """
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / CANONICAL_READINESS).is_file():
+            return parent
+    raise ConfigurationError(
+        "cannot locate the canonical readiness registry; refusing to derive readiness")
+
+
+def _canonical(kind: str, supplied: Path | None) -> Path:
+    """Return the canonical artifact, refusing any substitute."""
+    root = _program_root()
+    canonical = root / (CANONICAL_READINESS if kind == "readiness" else CANONICAL_CLAIMS)
+    if supplied is not None:
+        try:
+            same = Path(supplied).resolve() == canonical.resolve()
+        except OSError:
+            same = False
+        if not same:
+            raise ConfigurationError(
+                f"refusing a non-canonical {kind} artifact: {supplied}. "
+                f"Readiness is derived from {canonical}, never from a supplied path. "
+                "To change readiness, change the registry in the repository, where the "
+                "edit is reviewable and version-controlled.")
+    return canonical
+
+
+def _digest(path: Path) -> str:
+    """SHA-256 of the artifact as read, so a score records exactly what permitted it."""
+    return "sha256:" + hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -89,10 +141,23 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "score":
             payload = load_object(args.input)
+            # AUD-01: readiness is derived from the authoritative artifacts and their
+            # digests are emitted, so a score can be tied to the exact registry state
+            # that permitted it. There is no caller-controlled readiness flag.
+            readiness_path = _canonical("readiness", getattr(args, "readiness", None))
+            claims_path = _canonical("claims", getattr(args, "claims", None))
+            readiness_doc = load_object(readiness_path)
+            claims_doc = load_object(claims_path)
+            validate_program(readiness_path, claims_path)
             result = score_assessment(
                 load_object(args.scorecard), payload["component_scores"], payload["evidence_refs"],
                 triggered_auto_failures=payload.get("triggered_auto_failures", []),
-                assessment_ready=args.assessment_ready,
+                readiness=readiness_doc,
+                claims=claims_doc,
+                artifact_digests={
+                    "assessment_readiness.json": _digest(readiness_path),
+                    "assurance_claims.json": _digest(claims_path),
+                },
             )
             _print(result)
             return 0

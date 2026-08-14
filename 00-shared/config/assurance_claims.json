@@ -975,6 +975,44 @@
       "owner": "Program owner",
       "independent_reviewer": null,
       "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "PURPLE-READINESS-DERIVED-001",
+      "version": 2,
+      "claim": "An exercise score cannot be marked ASSESSMENT_CANDIDATE, and assurance cannot be permitted, while any readiness gate is unverified in the program's own registry.",
+      "scope": {
+        "artifact": "aegis_purple.scoring + cli score",
+        "environment": "all"
+      },
+      "mechanism": {
+        "construction": "Readiness is DERIVED from the canonical assessment_readiness.json located from the package's own path. There is no caller-supplied readiness boolean, and a non-canonical registry path is refused outright. Only the exact status string VERIFIED counts; a malformed registry raises rather than defaulting to ready. The result records the derivation source, the pending gates, and digests of both artifacts."
+      },
+      "assumptions": [
+        "Edits to the canonical registry are reviewable and version-controlled.",
+        "An attacker with write access to the repository's own registry is out of scope for this control - that edit is visible in git."
+      ],
+      "evidence": [
+        "purple-team/tests/test_readiness_derivation.py::test_pending_gates_force_training_marking (NEGATIVE)",
+        "purple-team/tests/test_readiness_derivation.py::test_one_pending_gate_is_enough_to_hold (NEGATIVE)",
+        "purple-team/tests/test_readiness_derivation.py::test_all_verified_permits_candidate (POSITIVE - derivation works both ways)",
+        "purple-team/tests/test_readiness_derivation.py::test_score_accepts_no_caller_supplied_readiness (NEGATIVE)",
+        "purple-team/tests/test_readiness_derivation.py::test_cli_rejects_the_old_bypass_flag (NEGATIVE)",
+        "purple-team/tests/test_readiness_derivation.py::test_malformed_registry_fails_closed (NEGATIVE)",
+        "purple-team/tests/test_readiness_derivation.py::test_unknown_status_is_not_verified (NEGATIVE)",
+        "purple-team/tests/test_readiness_derivation.py::ForgedRegistryTests::test_forged_registry_is_refused (NEGATIVE - the attack that defeated v1)"
+      ],
+      "limitations": [
+        "Does not defend against an attacker who can edit the canonical registry in the repository. That edit is version-controlled and reviewable, which is the control at that layer.",
+        "v1 of this fix was INSUFFICIENT: it replaced a caller-controlled boolean with a caller-controlled path, and a self-consistent forged registry still produced ASSESSMENT_CANDIDATE. Found by attacking the fix rather than trusting it."
+      ],
+      "regression_triggers": [
+        "scoring_signature_change",
+        "cli_argument_change",
+        "readiness_schema_change"
+      ],
+      "owner": "Purple Lead",
+      "independent_reviewer": "external adversarial review 2026-08-14 (AUD-01)",
+      "status": "EVIDENCED"
     }
   ]
 }

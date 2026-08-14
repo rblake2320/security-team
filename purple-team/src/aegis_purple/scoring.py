@@ -11,8 +11,19 @@ def score_assessment(
     evidence_refs: dict[str, list[str]],
     *,
     triggered_auto_failures: list[str],
-    assessment_ready: bool,
+    readiness: dict[str, Any],
+    claims: dict[str, Any],
+    artifact_digests: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    """Score an exercise.
+
+    AUD-01: assessment readiness is DERIVED from the authoritative readiness
+    registry, never supplied by the caller. The previous signature took an
+    `assessment_ready: bool` straight from a CLI flag, so
+    `aegis-purple score --assessment-ready` produced an ASSESSMENT_CANDIDATE
+    marking with `assurance_statement_permitted: true` while the program state
+    was NOT_ASSESSMENT_READY. A caller-controlled boolean is not a control.
+    """
     components = scorecard.get("components")
     if not isinstance(components, dict) or not components:
         raise ConfigurationError("scorecard requires components")
@@ -47,6 +58,9 @@ def score_assessment(
     if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not 0 <= float(threshold) <= 1:
         raise ConfigurationError("invalid pass_threshold")
     passed = not auto_failed and final >= float(threshold)
+
+    # Derived, not supplied. Every required gate must be VERIFIED.
+    assessment_ready, pending = _readiness_state(readiness)
     return {
         "diagnostic_score": round(diagnostic, 6),
         "final_score": round(final, 6),
@@ -55,5 +69,27 @@ def score_assessment(
         "triggered_auto_failures": triggered_auto_failures,
         "marking": "ASSESSMENT_CANDIDATE" if assessment_ready else "TRAINING_OR_ENGINEERING_USE_ONLY",
         "assurance_statement_permitted": assessment_ready,
+        "readiness_derived_from": "assessment_readiness.json",
+        "pending_readiness_gates": pending,
+        "artifact_digests": artifact_digests or {},
     }
+
+
+def _readiness_state(readiness: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Return (ready, pending_gates) from the authoritative registry. Fails closed."""
+    block = readiness.get("assessment_readiness")
+    definitions = readiness.get("gate_definitions")
+    if not isinstance(block, dict) or not isinstance(definitions, dict):
+        raise ConfigurationError("readiness registry is malformed; refusing to derive readiness")
+    required = block.get("required_gates")
+    if not isinstance(required, list) or not required:
+        raise ConfigurationError("readiness registry declares no required gates")
+    pending = []
+    for gate in required:
+        definition = definitions.get(gate)
+        if not isinstance(definition, dict):
+            raise ConfigurationError(f"readiness gate is undefined: {gate}")
+        if definition.get("status") != "VERIFIED":
+            pending.append(gate)
+    return (not pending), sorted(pending)
 

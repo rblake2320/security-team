@@ -12,6 +12,19 @@ from aegis_purple.scoring import score_assessment
 ROOT = Path(__file__).resolve().parents[2]
 
 
+# AUD-01: score_assessment derives readiness from the authoritative registry.
+# Tests supply a registry, never a caller-controlled boolean.
+_GATES = ["exercise_assurance_operational", "key_custody_verified"]
+_PENDING_REGISTRY = {
+    "assessment_readiness": {"required_gates": _GATES},
+    "gate_definitions": {g: {"status": "PENDING"} for g in _GATES},
+}
+_VERIFIED_REGISTRY = {
+    "assessment_readiness": {"required_gates": _GATES},
+    "gate_definitions": {g: {"status": "VERIFIED"} for g in _GATES},
+}
+
+
 class AssuranceTests(unittest.TestCase):
     def test_current_readiness_holds_assurance(self) -> None:
         result = evaluate_readiness(ROOT / "00-shared" / "config" / "assessment_readiness.json")
@@ -44,7 +57,7 @@ class AssuranceTests(unittest.TestCase):
         result = score_assessment(
             scorecard, components, evidence,
             triggered_auto_failures=["any unresolved critical detection gap at exercise close"],
-            assessment_ready=False,
+            readiness=_PENDING_REGISTRY, claims={},
         )
         self.assertEqual(result["diagnostic_score"], 1.0)
         self.assertEqual(result["final_score"], 0.0)
@@ -56,7 +69,7 @@ class AssuranceTests(unittest.TestCase):
         evidence = {name: [f"EV-{name}"] for name in scorecard["components"]}
         evidence["D"] = []
         with self.assertRaises(ConfigurationError):
-            score_assessment(scorecard, components, evidence, triggered_auto_failures=[], assessment_ready=False)
+            score_assessment(scorecard, components, evidence, triggered_auto_failures=[], readiness=_PENDING_REGISTRY, claims={})
 
     def test_boolean_score_is_rejected(self) -> None:
         scorecard = json.loads((ROOT / "purple-team" / "config" / "scorecard.json").read_text())
@@ -64,7 +77,7 @@ class AssuranceTests(unittest.TestCase):
         components["C"] = True
         evidence = {name: [f"EV-{name}"] for name in scorecard["components"]}
         with self.assertRaises(ConfigurationError):
-            score_assessment(scorecard, components, evidence, triggered_auto_failures=[], assessment_ready=False)
+            score_assessment(scorecard, components, evidence, triggered_auto_failures=[], readiness=_PENDING_REGISTRY, claims={})
 
 
 if __name__ == "__main__":
