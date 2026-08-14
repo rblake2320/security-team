@@ -82,15 +82,46 @@ def check_mode(authorization: dict, requested: str, gates: list[str], modes: dic
 
 
 def check_revocation(authorization: dict, revocations: dict, now: datetime) -> None:
-    """REVOCATION. A valid signature is not sufficient; revocation overrides it."""
-    for rec in revocations.get("revocations", []):
-        if rec.get("exercise_id") not in (authorization.get("exercise_id"), "*"):
+    """REVOCATION. A valid signature is not sufficient; revocation overrides it.
+
+    AUD-06: malformed records previously surfaced KeyError / ValueError /
+    AttributeError instead of a named safety refusal. A revocation list that
+    cannot be parsed cannot establish that execution is permitted, so every
+    malformed record now fails CLOSED under REVOCATION-CONFIG rather than
+    escaping as an untyped parser error.
+    """
+    records = revocations.get("revocations", [])
+    if not isinstance(records, list):
+        raise Refused("REVOCATION-CONFIG", "revocations must be a list")
+
+    for index, rec in enumerate(records):
+        if not isinstance(rec, dict):
+            raise Refused("REVOCATION-CONFIG",
+                          f"record {index} is not an object; cannot establish revocation state")
+        for field in ("revocation_id", "exercise_id", "effective_from", "reason"):
+            value = rec.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise Refused("REVOCATION-CONFIG",
+                              f"record {index} is missing a valid {field!r}")
+
+        if rec["exercise_id"] not in (authorization.get("exercise_id"), "*"):
             continue
         if rec.get("key_id") not in (authorization.get("key_id"), None, "*"):
             continue
-        effective = datetime.fromisoformat(rec["effective_from"])
+
+        try:
+            effective = datetime.fromisoformat(rec["effective_from"])
+        except ValueError as exc:
+            raise Refused("REVOCATION-CONFIG",
+                          f"record {rec['revocation_id']} has an unparseable "
+                          f"effective_from: {rec['effective_from']!r}") from exc
         if effective.tzinfo is None:
-            effective = effective.replace(tzinfo=UTC)
+            # A naive timestamp is ambiguous. Guessing a zone here could place a
+            # live revocation in the future and let execution proceed.
+            raise Refused("REVOCATION-CONFIG",
+                          f"record {rec['revocation_id']} effective_from has no time zone; "
+                          "an ambiguous revocation time cannot be evaluated safely")
+
         if now >= effective:
             raise Refused("REVOKED",
                           f"{rec['revocation_id']} effective {rec['effective_from']}: {rec['reason']}")

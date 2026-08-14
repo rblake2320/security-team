@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from dataclasses import replace
 from pathlib import Path
 
+from .atomicio import atomic_write_text
 from .audit import AuditLedger, seal_ledger, verify_ledger_seal
 from .authorization import (
     AUTHORIZATION_KEY,
@@ -145,9 +145,10 @@ def _authorize(args: argparse.Namespace) -> int:
         "signature": authorization.signature,
         "allow_public_targets": authorization.allow_public_targets,
     }
-    temporary = args.engagement.with_name(args.engagement.name + ".tmp")
-    temporary.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    os.replace(temporary, args.engagement)
+    # AUD-08: predictable sibling temp path, world-default permissions, no fsync.
+    # An authorization record carries the signed scope and ticket, so a truncated
+    # or attacker-influenced write is a control failure, not just a lost file.
+    atomic_write_text(args.engagement, json.dumps(data, indent=2) + "\n")
     print(f"authorized scope {scope_fingerprint(candidate)} via ticket {authorization.ticket}")
     return 0
 

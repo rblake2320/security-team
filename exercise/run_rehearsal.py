@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -159,14 +158,25 @@ def run(
         test_case["identity_id"], test_case["record_id"]
     )
     _assert_safety_boundary(authorization, "before_evidence_write", now, revocations_path, boundary_hook)
+    # AUD-03: stages 4-6 were inferred from stage 3 - `investigated` and `contained`
+    # were set to alert_fired, and `reported` was hardcoded True. An alert firing is
+    # not evidence that a human triaged it, that anything was contained, or that a
+    # report reached anyone. That inflated all_stages_evidenced to true for a run
+    # that only ever demonstrated prevention, logging and alerting.
+    #
+    # Stages 1-3 are what this synthetic rehearsal can actually evidence: they are
+    # produced by the harness itself. Stages 4-6 grade HUMAN response and require
+    # separate artifacts, so they are false here and the limitation is explicit.
     stages = {
         "prevented": retest.status == 403,
         "logged": baseline.event["event_type"] == "record.read",
         "alerted": alert_fired,
-        "investigated": alert_fired,
-        "contained": alert_fired,
-        "reported": True,
+        "investigated": False,
+        "contained": False,
+        "reported": False,
     }
+    machine_evidenced = ("prevented", "logged", "alerted")
+    requires_human_evidence = ("investigated", "contained", "reported")
     result = {
         "schema": "purple.first-run-result/1.0",
         "exercise_id": authorization["exercise_id"],
@@ -176,16 +186,31 @@ def run(
         "retest_status": retest.status,
         "remediation_effective": retest.status == abuse_case["expected_retest"],
         "six_stage_results": stages,
+        # Scoped to what this harness can actually produce. `all_stages_evidenced`
+        # is retained for compatibility but is now the honest conjunction: it can
+        # only be true if stages 4-6 are separately evidenced, which a synthetic
+        # rehearsal never does.
+        "machine_evidenced_stages": list(machine_evidenced),
+        "machine_stages_evidenced": all(stages[s] for s in machine_evidenced),
+        "stages_requiring_separate_evidence": list(requires_human_evidence),
         "all_stages_evidenced": all(stages.values()),
+        "stage_evidence_limitation":
+            "Stages 4-6 (investigated, contained, reported) grade human response and "
+            "are not evidenced by this synthetic rehearsal. They are false unless "
+            "produced by separate artifacts. AUD-03.",
         "network_activity": False,
     }
     if write_evidence:
         output = ROOT / "evidence" / "first_run_results.json"
         output.parent.mkdir(parents=True, exist_ok=True)
-        temporary = output.with_suffix(".tmp")
+        # AUD-08: the temp path was a predictable sibling (`first_run_results.tmp`),
+        # so concurrent writers collided and a hostile local process could pre-create
+        # it; the write was also not fsynced before replace, so a crash could leave
+        # truncated evidence. Unique securely-created file, fsynced, atomic replace.
+        from filelock import atomic_write_bytes
+
         body = canonical(result) + b"\n"
-        temporary.write_bytes(body)
-        os.replace(temporary, output)
+        atomic_write_bytes(output, body)
         digest = hashlib.sha256(body).hexdigest()
         print(f"{result['result_marking']}: rehearsal complete; evidence_sha256={digest}")
     return result
@@ -218,7 +243,10 @@ if __name__ == "__main__":
     import clearance as _clr
 
     try:
-        raise SystemExit(0 if run()["all_stages_evidenced"] else 2)
+        # AUD-03: exit on what the harness can actually evidence. Keying success to
+        # all_stages_evidenced would now always fail, because stages 4-6 require
+        # separate human-response artifacts this rehearsal does not produce.
+        raise SystemExit(0 if run()["machine_stages_evidenced"] else 2)
     except _clr.ClearanceError as exc:      # fail closed, exit 1, no traceback
         print(exc)
         raise SystemExit(1) from None

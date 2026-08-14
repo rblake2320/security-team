@@ -58,7 +58,14 @@ class RehearsalTests(unittest.TestCase):
             path.unlink(missing_ok=True)
         self.assertTrue(result["orange_prediction_confirmed"])
         self.assertTrue(result["remediation_effective"])
-        self.assertTrue(result["all_stages_evidenced"])
+        # AUD-03: the rehearsal may only claim what it evidences.
+        self.assertTrue(result["machine_stages_evidenced"])
+        # NEGATIVE: it must NOT claim human-response stages it never observed.
+        self.assertFalse(result["all_stages_evidenced"],
+                         "a synthetic rehearsal must not claim all six stages")
+        for stage in ("investigated", "contained", "reported"):
+            self.assertFalse(result["six_stage_results"][stage],
+                             f"{stage} requires separate evidence and was not produced")
         self.assertFalse(result["network_activity"])
 
     def test_authorization_tampering_is_rejected(self) -> None:

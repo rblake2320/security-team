@@ -16,6 +16,18 @@ implementation in this folder.
 
 ---
 
+## [1.5.1] — 2026-08-14 — typed configuration failures (AUD-05)
+
+### Fixed
+- `load_trust_policy` type-checked `sources` but then called `policy.get("version")`
+  unguarded, so a syntactically valid non-object policy (array, string, number, bool,
+  null) raised `AttributeError` and escaped the typed `ConfigurationError` contract
+  callers rely on to fail closed. The object type is now checked once, up front.
+- Sensor health upsert could move `last_event_time` and `last_event_id` BACKWARDS when
+  events arrived out of order, understating sensor freshness. The upsert now keeps the
+  newest observation, and keeps `last_event_id` consistent with the time it belongs to
+  rather than letting the two fields describe different events (AUD-04).
+
 ## [1.5.0] — 2026-08-14 — assurance claim gate
 
 ### Added — claim-mechanism-evidence discipline with an automated checker

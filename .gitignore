@@ -27,6 +27,8 @@ exercise/white/_test_attestation.json
 # ---------------------------------------------------------------------------
 exercise/evidence/clearance.json
 exercise/evidence/used_nonces.json
+# Lock files are machine-local runtime state, never shared artifacts.
+*.lock
 exercise/evidence/_test_*.json
 **/runtime/
 *.db

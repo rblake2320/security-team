@@ -14,6 +14,16 @@ Covers **both** the team's governance documents and the Aegis implementation in 
 
 ---
 
+## [1.6.1] — 2026-08-14 — atomic authorization writes (AUD-08)
+
+### Fixed
+- `aegis-rt authorize` wrote the engagement authorization through a predictable
+  sibling temp path (`<engagement>.tmp`) with default permissions and no fsync. A
+  concurrent or hostile local process could collide with or pre-create that path,
+  and a crash mid-write could leave a truncated authorization on disk. Replaced with
+  `atomicio.atomic_write_text`: a securely created unique temp file, fsynced, mode
+  `0600`, atomically replaced, and removed on failure.
+
 ## [1.6.0] — 2026-08-14 — canonical implementation and cross-platform containment
 
 ### Verified

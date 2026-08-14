@@ -27,9 +27,16 @@ import base64
 import json
 from pathlib import Path
 
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 TRUST = Path(__file__).resolve().parent / "trust"
+# (path relative to exercise/, signing domain). One list so the consistency check and
+# the re-signer can never drift apart - drift there is exactly how AUD-07 hid.
+_SCAFFOLDING = [
+    (Path("white") / "authorization.json", b""),
+    (Path("white") / "environment_attestation.json", b"exercise.environment-attestation.v2"),
+]
 PRIVATE = TRUST / "_fixture_private_keys.json"
 
 ROLES = [
@@ -41,7 +48,67 @@ ROLES = [
 
 
 def material_present() -> bool:
+    """Files exist. NOT sufficient on its own - see `material_consistent`."""
     return PRIVATE.is_file() and all((TRUST / f"{kid}.json").is_file() for kid, _ in ROLES)
+
+
+def material_consistent() -> bool:
+    """Every private key actually derives the public key recorded beside it.
+
+    AUD-07: `material_present` only checked that files EXIST. Existence is not
+    consistency. Regenerating private keys while public records survived (or the
+    reverse) left a set that looked complete and failed at signature-verification
+    time with a misleading "signature is invalid", far from the real cause.
+
+    Derive each public key from its private key and compare. Cheap, and it turns a
+    confusing downstream failure into an accurate local one.
+    """
+    if not material_present():
+        return False
+    try:
+        keys = json.loads(PRIVATE.read_text(encoding="utf-8"))["keys"]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError):
+        return False
+    for key_id, _role in ROLES:
+        try:
+            private_key = Ed25519PrivateKey.from_private_bytes(base64.b64decode(keys[key_id]))
+            record = json.loads((TRUST / f"{key_id}.json").read_text(encoding="utf-8"))
+            expected = base64.b64encode(private_key.public_key().public_bytes_raw()).decode()
+            if record.get("public_key") != expected:
+                return False
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            return False
+    return True
+
+
+def scaffolding_current() -> bool:
+    """The fixture-signed ENGINEERING scaffolding verifies against the CURRENT keys.
+
+    AUD-07: `main(--force)` regenerated keys but never re-signed, so a developer who
+    ran the documented `--force` command silently broke the rehearsal. Verify rather
+    than assume.
+    """
+    try:
+        keys = json.loads(PRIVATE.read_text(encoding="utf-8"))["keys"]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError):
+        return False
+    exercise_root = TRUST.parents[2]
+    for relative, domain in _SCAFFOLDING:
+        path = exercise_root / relative
+        if not path.is_file():
+            return False
+        try:
+            doc = json.loads(path.read_text(encoding="utf-8"))
+            body = {k: v for k, v in doc.items() if k != "signature"}
+            payload = json.dumps(body, sort_keys=True, separators=(",", ":"),
+                                 ensure_ascii=False).encode("utf-8")
+            private_key = Ed25519PrivateKey.from_private_bytes(
+                base64.b64decode(keys["fixture-white-2026"]))
+            private_key.public_key().verify(
+                base64.b64decode(doc["signature"]), domain + payload)
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError, InvalidSignature):
+            return False
+    return True
 
 
 def generate(force: bool = False) -> bool:
@@ -97,15 +164,26 @@ def resign_engineering_artifacts() -> None:
     """
     keys = json.loads(PRIVATE.read_text(encoding="utf-8"))["keys"]
     ex = TRUST.parents[2]                      # .../exercise  (trust->fixtures->tests->exercise)
-    _resign(ex / "white" / "authorization.json", b"", "fixture-white-2026", keys)
-    _resign(ex / "white" / "environment_attestation.json",
-            b"exercise.environment-attestation.v2", "fixture-white-2026", keys)
+    for relative, domain in _SCAFFOLDING:
+        _resign(ex / relative, domain, "fixture-white-2026", keys)
 
 
 def ensure() -> None:
-    """Idempotent helper for tests and preflight: generate only if missing."""
-    if generate(force=False):
-        resign_engineering_artifacts()   # new keys -> scaffolding must be re-signed
+    """Idempotent helper for tests and preflight: converge on self-consistent material.
+
+    AUD-07: this previously regenerated only when files were MISSING, and re-signed
+    only when it had regenerated. Material that was present but internally
+    inconsistent - mismatched keypairs, or scaffolding signed by a superseded key -
+    was left in place and surfaced later as a misleading signature failure.
+
+    Now both conditions are checked for real, and each is repaired.
+    """
+    if not material_consistent():
+        generate(force=True)
+        resign_engineering_artifacts()
+        return
+    if not scaffolding_current():
+        resign_engineering_artifacts()   # keys fine, scaffolding stale
 
 
 def main() -> int:
@@ -113,6 +191,11 @@ def main() -> int:
     ap.add_argument("--force", action="store_true", help="regenerate even if present")
     args = ap.parse_args()
     made = generate(force=args.force)
+    if made or not scaffolding_current():
+        # AUD-07: --force rotated the keys but left the scaffolding signed by the old
+        # one, so the documented regeneration command silently broke the rehearsal.
+        resign_engineering_artifacts()
+        print("re-signed engineering scaffolding against current fixture keys")
     print(f"fixture trust material {'generated' if made else 'already present'} -> {TRUST}")
     print("all records marked environment=TEST_ONLY; none are committed")
     return 0

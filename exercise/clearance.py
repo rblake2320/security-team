@@ -29,7 +29,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import os
 import secrets
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -232,35 +231,43 @@ def _prune(used: dict, now: datetime) -> dict:
 def consume(nonce: str, exercise_id: str, *, now: datetime | None = None) -> None:
     """Single use. A replayed clearance is refused even if everything else holds.
 
-    PRODUCTION NOTE: this ledger is machine-local and gitignored. On a fresh clone it
-    starts empty, so replay protection is per-host. That is correct for the clearance
-    TTL (5 minutes) but means a clearance cannot be replayed on host A and blocked on
-    host B. Cross-host replay protection requires a shared ledger and is a deployment
-    decision, recorded as a limitation on EXERCISE-CLEARANCE-BINDING-001.
+    AUD-02: the read-modify-write was unlocked and used a shared `.tmp` sibling.
+    A barrier-synchronised 6-process test failed 12/12 rounds with THREE processes
+    each consuming the same nonce - replay protection did not hold at all. The whole
+    critical section is now under an exclusive lock, and the write is atomic via a
+    unique temp file.
+
+    PRODUCTION NOTE: this ledger is machine-local and gitignored. Replay protection
+    is per host; cross-host protection needs a shared transactional store and is a
+    deployment decision (EXERCISE-CLEARANCE-BINDING-001 limitations).
     """
+    from filelock import atomic_write, exclusive_lock
+
     now = now or datetime.now(UTC)
-    used = {}
-    if NONCE_LEDGER.exists():
-        try:
-            used = json.loads(NONCE_LEDGER.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            # A corrupt ledger cannot prove non-replay. Fail closed rather than
-            # starting fresh, which would silently reopen every past nonce.
+    with exclusive_lock(NONCE_LEDGER):
+        used = {}
+        if NONCE_LEDGER.exists():
+            try:
+                used = json.loads(NONCE_LEDGER.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                # A corrupt ledger cannot prove non-replay. Fail closed rather than
+                # starting fresh, which would silently reopen every past nonce.
+                raise ClearanceError(
+                    "REFUSED [CLEARANCE-LEDGER-CORRUPT] nonce ledger is unreadable; "
+                    "replay protection cannot be established") from exc
+        if not isinstance(used, dict):
             raise ClearanceError(
-                "REFUSED [CLEARANCE-LEDGER-CORRUPT] nonce ledger is unreadable; "
-                "replay protection cannot be established") from exc
+                "REFUSED [CLEARANCE-LEDGER-CORRUPT] nonce ledger is not an object")
 
-    if nonce in used:
-        raise ClearanceError(f"REFUSED [CLEARANCE-REPLAY] nonce already used at {used[nonce]['at']}")
+        if nonce in used:
+            raise ClearanceError(
+                f"REFUSED [CLEARANCE-REPLAY] nonce already used at {used[nonce]['at']}")
 
-    used = _prune(used, now)
-    if len(used) >= NONCE_LEDGER_MAX_ENTRIES:
-        raise ClearanceError(
-            f"REFUSED [CLEARANCE-LEDGER-FULL] {len(used)} live nonces exceeds the "
-            f"{NONCE_LEDGER_MAX_ENTRIES} ceiling; investigate before continuing")
+        used = _prune(used, now)
+        if len(used) >= NONCE_LEDGER_MAX_ENTRIES:
+            raise ClearanceError(
+                f"REFUSED [CLEARANCE-LEDGER-FULL] {len(used)} live nonces exceeds the "
+                f"{NONCE_LEDGER_MAX_ENTRIES} ceiling; investigate before continuing")
 
-    used[nonce] = {"exercise_id": exercise_id, "at": now.isoformat()}
-    NONCE_LEDGER.parent.mkdir(parents=True, exist_ok=True)
-    tmp = NONCE_LEDGER.with_suffix(".tmp")
-    tmp.write_text(json.dumps(used, indent=2, sort_keys=True), encoding="utf-8")
-    os.replace(tmp, NONCE_LEDGER)
+        used[nonce] = {"exercise_id": exercise_id, "at": now.isoformat()}
+        atomic_write(NONCE_LEDGER, json.dumps(used, indent=2, sort_keys=True))

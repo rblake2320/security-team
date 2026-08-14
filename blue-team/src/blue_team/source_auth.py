@@ -19,7 +19,13 @@ def load_trust_policy(path: str | Path) -> dict[str, Any]:
         policy = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ConfigurationError("source trust policy is unreadable") from exc
-    sources = policy.get("sources") if isinstance(policy, dict) else None
+    # AUD-05: `sources` was guarded by isinstance but the very next line called
+    # policy.get("version") unguarded, so a syntactically valid non-object policy
+    # (array, string, number, null, bool) raised AttributeError and bypassed the
+    # typed configuration-error contract. Check the type once, up front.
+    if not isinstance(policy, dict):
+        raise ConfigurationError("source trust policy must be a JSON object")
+    sources = policy.get("sources")
     if policy.get("version") != 1 or not isinstance(sources, dict) or not sources:
         raise ConfigurationError("source trust policy is invalid")
     return policy

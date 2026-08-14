@@ -12,6 +12,50 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) · Versioning: 
 
 ---
 
+## [1.8.1] — 2026-08-14 — readiness derivation and evidence integrity
+
+### Fixed
+- Scoring accepted a caller-supplied readiness verdict. Replaced with derivation from
+  the registry, requiring an exact `VERIFIED` state and raising `ConfigurationError`
+  on a malformed registry rather than treating it as satisfied (AUD-01).
+- Replacing the caller-controlled boolean with a caller-controlled PATH was not a fix:
+  a forged registry still yielded `ASSESSMENT_CANDIDATE`. The CLI now refuses any
+  non-canonical registry path and records artifact digests (AUD-01b).
+
+### Fixed — exercise harness
+- **Replay protection did not hold under concurrency (AUD-02).** The nonce ledger did
+  an unlocked read-modify-write. A barrier-synchronised 6-process test failed 12/12
+  rounds, with THREE processes each consuming the same nonce successfully; losers got
+  a raw `PermissionError` instead of a typed refusal. This was reported as a Medium
+  error-handling issue but is a control failure: `consume()` now holds a cross-platform
+  exclusive lock across the whole critical section. Verified at 12 workers x 25 rounds
+  (300 concurrent attempts): exactly one success per round, all losers refused with
+  `CLEARANCE-REPLAY`. Note: unique temp names ALONE made this worse (5 successes, not
+  3) — the old temp collision was accidentally serialising some writers. The lock is
+  the control; atomic writes alone would have been a false fix.
+- Rehearsal results inferred stages 4-6 from stage 3: `investigated` and `contained`
+  were set to `alert_fired` and `reported` was hardcoded true, inflating
+  `all_stages_evidenced` for runs that only ever demonstrated prevention, logging and
+  alerting. Stages 4-6 grade human response, are now false, and the limitation is
+  stated in the evidence record (AUD-03).
+- `check_revocation` trusted the shape of the revocation registry. Malformed records
+  now produce typed `REVOCATION-CONFIG` refusals rather than escaping as raw
+  exceptions (AUD-06).
+- **Fixture staleness was reported as fixed but was not (AUD-07).** `material_present`
+  checked only that files EXIST, so a mismatched keypair passed and `ensure()` repaired
+  nothing; and `main(--force)` — the documented regeneration command — rotated keys
+  without re-signing the scaffolding, silently breaking the rehearsal with a misleading
+  "signature is invalid". Added real keypair-derivation and signature-verification
+  checks, and made both paths self-repairing.
+- Nonce-ledger and rehearsal-evidence writes used predictable sibling temp paths
+  without fsync. Both now use unique securely created files, fsynced, mode `0600`,
+  atomically replaced (AUD-08).
+
+### Testing
+- All fixes are falsification-verified: each fix was reverted to confirm its regression
+  test actually fails without it. The concurrency tests use real subprocesses and a real
+  on-disk ledger — a mocked lock would only prove the mock works.
+
 ## [1.8.0] — 2026-08-14 — engineering completion-register closure
 
 ### Added

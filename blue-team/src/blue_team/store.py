@@ -205,9 +205,14 @@ class EvidenceStore:
                 VALUES (?, ?, ?, ?, ?, ?)
                 ON CONFLICT(sensor_key) DO UPDATE SET
                     last_seen = excluded.last_seen,
+                    -- AUD-04: time and id must move as ONE pair. Updating the id
+                    -- unconditionally let a late, older event overwrite the id while
+                    -- the timestamp kept the newer value, pairing a timestamp with
+                    -- the wrong event.
                     last_event_time = CASE WHEN excluded.last_event_time > sensor_health.last_event_time
                                            THEN excluded.last_event_time ELSE sensor_health.last_event_time END,
-                    last_event_id = excluded.last_event_id""",
+                    last_event_id = CASE WHEN excluded.last_event_time > sensor_health.last_event_time
+                                         THEN excluded.last_event_id ELSE sensor_health.last_event_id END""",
                 (sensor_key, event.source, event.host, now, event_time, event.event_id),
             )
             self._append_audit("event_ingested", event.event_id, {"event_hash": event_hash})
