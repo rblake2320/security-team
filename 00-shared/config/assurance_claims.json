@@ -947,7 +947,7 @@
       "claim": "Content-addressed files hash identically on Linux and Windows checkouts, and the harness provisions itself from a clean clone.",
       "scope": {
         "artifact": ".gitattributes + make_fixture_trust.py",
-        "environment": "ubuntu-latest, windows-latest, macos-latest"
+        "environment": "ubuntu-latest, windows-latest"
       },
       "mechanism": {
         "construction": "`* text=auto eol=lf` plus `-text` (no translation) on files hashed or signed over raw bytes; fixture trust material and engineering scaffolding generated on demand rather than committed."
@@ -960,11 +960,12 @@
         "GitHub Actions run 31817937014: SUCCESS on ubuntu-latest and windows-latest",
         "GitHub Actions run 31817758247: windows-latest FAILED with 'rule integrity check failed: endpoint.json' before the fix (NEGATIVE)",
         "GitHub Actions run 31817114551: FAILED on missing fixture keys in a fresh clone before the fix (NEGATIVE)",
-        "local fresh-clone simulation: fixture material deleted, 10/10 gates PASS"
+        "local fresh-clone simulation: fixture material deleted, 10/10 gates PASS",
+        "GitHub Actions run 31818720772: macos-latest FAILED at hash-pinned install, demonstrating the pin is enforced rather than decorative (NEGATIVE)"
       ],
       "limitations": [
         "Guards the files listed in .gitattributes. A new content-addressed file added without an entry is not covered.",
-        "Exercised on ubuntu-latest, windows-latest and macos-latest. Other platforms untested."
+        "macOS is NOT exercised. Attempted 2026-08-14 (run 31818720772): the reviewed hash-pinned runtime covers CPython 3.12 x64 Linux/Windows wheels only, so --require-hashes refused on macos-latest. Closing this requires REVIEWING and adding macOS wheel hashes to tools/requirements-runtime.txt - not pasting fetched hashes into a file whose purpose is 'exact reviewed runtime'."
       ],
       "regression_triggers": [
         "gitattributes_change",
