@@ -14,6 +14,40 @@ Covers **both** the team's governance documents and the Aegis implementation in 
 
 ---
 
+## [1.7.0] — 2026-08-14 — descriptor-verified scanning (RESIDUAL-HIGH)
+
+### Changed
+- **[M-adjacent] Offline scanners no longer trust a path between check and use.**
+  `source.static` and `repository.posture` resolved a path, validated containment in
+  the authorized root, then made SEPARATE `stat()` and `read_text()` calls against
+  that path. A hostile local writer could swap a component for a link out of scope in
+  that window and have the scanner read a file it was never authorized to touch. For
+  a red-team tool the authorized root IS the authorization boundary, so this is a
+  scope violation rather than a robustness issue.
+
+  New `checks/safe_scan.py`: traversal via `os.walk(followlinks=False)` with full
+  realpath containment on every component, and reads bound to an inode - the file is
+  opened once with `O_NOFOLLOW` where available and `fstat` on the DESCRIPTOR is
+  compared against the `lstat` taken during traversal. A swapped path no longer
+  matches and is refused. Traversal is bounded and raises `TraversalLimitExceeded`
+  rather than truncating silently, since silent truncation would let an attacker hide
+  files by padding the tree.
+
+  `is_symlink()` alone was insufficient: on Windows a JUNCTION is a reparse point that
+  `is_symlink()` reports as False and `os.walk(followlinks=False)` descends into. The
+  existing junction-escape tests caught this during development. Containment is
+  therefore decided by realpath, which covers symlinks, junctions and mounts alike.
+
+  Reads normalise CRLF explicitly, preserving the universal-newline behaviour that
+  `read_text` previously provided.
+
+### Testing
+- `tests/test_scan_race.py`: deterministic race injection performed inside the real
+  scanner's own loop (via `assert_running`, called once per entry), so the attacker
+  wins the race every time rather than occasionally. Falsification-verified — with the
+  inode binding removed, both end-to-end scanner tests read the out-of-scope content
+  and fail.
+
 ## [1.6.1] — 2026-08-14 — atomic authorization writes (AUD-08)
 
 ### Fixed

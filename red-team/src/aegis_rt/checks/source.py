@@ -6,6 +6,7 @@ from typing import ClassVar
 
 from ..models import CheckResult, Finding, Severity, Target, TargetKind
 from .base import ExecutionContext
+from .safe_scan import read_verified, walk_scope, within_root
 
 
 class SourceStaticCheck:
@@ -78,29 +79,35 @@ class SourceStaticCheck:
 
     def run(self, target: Target, context: ExecutionContext) -> CheckResult:
         root = Path(target.value).expanduser().resolve()
-        files = [root] if root.is_file() else root.rglob("*")
         findings: list[Finding] = []
-        for path in files:
-            context.assert_running()
+        # RESIDUAL-HIGH: this previously resolved each path, checked containment, then
+        # made SEPARATE stat/read calls against the path - a check/use gap a local
+        # attacker could win by swapping a component for a symlink out of scope.
+        # Traversal now never follows links, and the read is bound to the inode
+        # traversal validated. See safe_scan.
+        if root.is_file():
             try:
-                resolved_path = path.resolve(strict=True)
-                if root.is_dir():
-                    resolved_path.relative_to(root)
-            except (OSError, ValueError):
-                # A link or junction may not escape the exact authorized root.
+                entries = [(root, root.lstat())]
+            except OSError:
+                entries = []
+        else:
+            entries = walk_scope(root)
+        for resolved_path, expected in entries:
+            context.assert_running()
+            if root.is_dir() and not within_root(resolved_path, root):
                 continue
-            if not resolved_path.is_file() or (
-                resolved_path.suffix.lower() not in self._extensions and resolved_path.name.lower() != ".env"
+            if (
+                resolved_path.suffix.lower() not in self._extensions
+                and resolved_path.name.lower() != ".env"
             ):
                 continue
             if self._excluded_parts.intersection(resolved_path.parts):
                 continue
             context.consume_file()
-            try:
-                if resolved_path.stat().st_size > self._max_file_bytes:
-                    continue
-                content = resolved_path.read_text(encoding="utf-8", errors="replace")
-            except OSError:
+            content = read_verified(resolved_path, expected, max_bytes=self._max_file_bytes)
+            if content is None:
+                # Swapped, oversized, or unreadable. Skipping is the safe outcome:
+                # the alternative is reading a file outside the authorized scope.
                 continue
             relative = str(resolved_path.relative_to(root)) if root.is_dir() else resolved_path.name
             for rule_id, pattern, severity, title, remediation, cwe in self._rules:

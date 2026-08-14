@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ..models import CheckResult, Finding, Severity, Target, TargetKind
 from .base import ExecutionContext
+from .safe_scan import read_verified, walk_scope, within_root
 
 
 class RepositoryPostureCheck:
@@ -21,14 +22,11 @@ class RepositoryPostureCheck:
         if not root.is_dir():
             return CheckResult(self.check_id, target.value, "not_applicable")
         findings: list[Finding] = []
-        for candidate in root.rglob("*"):
+        # RESIDUAL-HIGH: see safe_scan. Same check/use gap as the source scanner -
+        # resolve, validate containment, then stat and read the path again.
+        for path, expected in walk_scope(root):
             context.assert_running()
-            try:
-                path = candidate.resolve(strict=True)
-                path.relative_to(root)
-            except (OSError, ValueError):
-                continue
-            if not path.is_file() or path.stat().st_size > self._max_file_bytes:
+            if not within_root(path, root):
                 continue
             relative = path.relative_to(root).as_posix()
             relevant = (
@@ -39,7 +37,9 @@ class RepositoryPostureCheck:
             if not relevant:
                 continue
             context.consume_file()
-            content = path.read_text(encoding="utf-8", errors="replace")
+            content = read_verified(path, expected, max_bytes=self._max_file_bytes)
+            if content is None:
+                continue
             if path.name.startswith("requirements"):
                 for number, line in enumerate(content.splitlines(), 1):
                     value = line.strip()
