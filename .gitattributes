@@ -1,0 +1,30 @@
+# Line-ending policy for the program.
+#
+# WHY THIS FILE EXISTS
+#   CI's second run failed on windows-latest only:
+#       ConfigurationError: rule integrity check failed: endpoint.json
+#   Sentinel Blue's rule manifest stores a SHA-256 over the RAW BYTES of each rule
+#   file. Git's automatic LF->CRLF translation on Windows checkout changes those
+#   bytes, so the integrity check fails on every Windows clone. Local runs and the
+#   Linux runner both passed; the defect was invisible until a cross-platform run.
+#
+#   Content-addressed files must never be line-ending translated.
+
+# Normalise text in the repository, check out LF everywhere. Deterministic across
+# platforms, which is what every hash, signature, and canonicalisation here assumes.
+* text=auto eol=lf
+
+# Explicitly binary-safe: these are hashed byte-for-byte by rule_manifest.json.
+# -text disables ALL translation, so the checked-out bytes equal the committed bytes.
+blue-team/rules/*.json     -text
+blue-team/config/*.json    -text
+blue-team/schemas/*.json   -text
+
+# Fixture and evidence material that is signed or digested over raw bytes.
+exercise/config/*.json     -text
+exercise/white/*.json      -text
+exercise/evidence/*.json   -text
+
+# Shell scripts and hooks must keep LF or they will not execute.
+*.sh                       text eol=lf
+00-shared/tools/hooks/*    text eol=lf
