@@ -105,6 +105,28 @@ class ReadVerifiedTests(unittest.TestCase):
                 "a file replaced after validation must not be read",
             )
 
+    def test_same_size_replacement_is_refused(self) -> None:
+        """The hard case: the swapped-in file is byte-for-byte the same LENGTH.
+
+        Without this, `test_replaced_file_is_refused` could pass on a size comparison
+        alone and the real discriminator would go untested. Linux inode reuse means
+        (st_dev, st_ino) may also match here, so ctime_ns is what must carry it.
+        """
+        with tempfile.TemporaryDirectory() as directory:
+            victim = Path(directory) / "target.py"
+            victim.write_text("A" * 64, encoding="utf-8")
+            expected = victim.lstat()
+
+            victim.unlink()
+            victim.write_text("B" * 64, encoding="utf-8")   # identical size
+            self.assertEqual(victim.lstat().st_size, expected.st_size,
+                             "precondition: the replacement is the same size")
+
+            self.assertIsNone(
+                read_verified(victim, expected, max_bytes=1_000_000),
+                "a same-size replacement must still be refused",
+            )
+
     def test_unchanged_file_is_still_read(self) -> None:
         """The guard must not be so strict that it refuses legitimate reads."""
         with tempfile.TemporaryDirectory() as directory:

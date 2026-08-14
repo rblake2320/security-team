@@ -104,6 +104,23 @@ def _contained(path: Path, anchor: str) -> bool:
     return resolved == anchor or resolved.startswith(anchor + os.sep)
 
 
+def _identity(info: os.stat_result) -> tuple:
+    """The tuple that must match between traversal-time lstat and read-time fstat.
+
+    Deliberately more than (dev, ino) - see `read_verified`. Inode numbers are recycled
+    on common Linux filesystems, so identity that rests on them alone is defeated by a
+    delete-and-recreate.
+    """
+    return (
+        info.st_dev,
+        info.st_ino,
+        info.st_ctime_ns,
+        info.st_size,
+        info.st_nlink,
+        info.st_mode,
+    )
+
+
 def _is_regular(info: os.stat_result) -> bool:
     import stat as _stat
 
@@ -125,9 +142,19 @@ def read_verified(path: Path, expected: os.stat_result, *, max_bytes: int) -> st
         actual = os.fstat(descriptor)
         if not _is_regular(actual):
             return None
-        # THE check: the descriptor must be the same inode traversal validated.
-        # A path swap between traversal and open changes one of these.
-        if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
+        # THE check: the descriptor must be the same FILE traversal validated.
+        #
+        # (st_dev, st_ino) alone is NOT sufficient. Linux CI caught this: ext4 reuses
+        # inode numbers, so deleting a file and immediately recreating it in the same
+        # directory frequently yields the SAME inode, and the swapped content was read.
+        # It passed on Windows, where NTFS does not recycle a file index that quickly -
+        # a platform-specific false sense of security.
+        #
+        # ctime_ns is the discriminator that matters: it is updated on creation and on
+        # any metadata change, and cannot be set backwards by an unprivileged writer
+        # (unlike mtime, which utimes() can forge). Size and nlink are cheap
+        # corroboration.
+        if _identity(actual) != _identity(expected):
             return None
         if actual.st_size > max_bytes:
             return None
