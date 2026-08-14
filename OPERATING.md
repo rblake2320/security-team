@@ -22,7 +22,7 @@ gates are pending and both need an external authority — see
 ## First five minutes
 
 ```bash
-cd "PKA testing/Purple team"
+cd security-team
 
 python 00-shared/tools/run_ci.py           # all 10 engineering gates
 python 00-shared/tools/run_ci.py --assurance   # MUST fail (exit 1) - that is correct

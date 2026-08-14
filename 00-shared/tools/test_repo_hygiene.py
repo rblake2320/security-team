@@ -6,7 +6,8 @@ program: a mechanism asserted, never demonstrated.
   1. The entire Purple team directory was UNTRACKED. 200+ files, 157 tests, no
      version control, no history, no backup.
   2. The CI workflows sat at `.github/workflows/`. GitHub Actions only
-     reads `<repo-root>/.github/workflows/`, and the repo root is `PKA testing/`.
+     reads `<repo-root>/.github/workflows/`, and the repo root was the parent
+     workspace, not this directory.
      The workflows had never run and COULD not run. Every claim whose evidence was
      "CI enforces X" was therefore unevidenced.
 

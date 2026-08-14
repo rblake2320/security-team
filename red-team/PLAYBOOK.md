@@ -27,7 +27,7 @@ Aegis enforces most of this in code. Do not work around any step — each one ex
 step before it can be forged.
 
 ```powershell
-cd "C:\Users\techai\PKA testing\Purple team\red-team"
+cd security-team/red-team
 $env:PYTHONPATH = (Resolve-Path src).Path
 
 # 0. BASELINE -- know the tool works before you point it at anything
