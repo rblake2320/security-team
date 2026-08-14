@@ -1013,6 +1013,88 @@
       "owner": "Purple Lead",
       "independent_reviewer": "external adversarial review 2026-08-14 (AUD-01)",
       "status": "EVIDENCED"
+    },
+    {
+      "claim_id": "EXERCISE-CLEARANCE-REPLAY-002",
+      "version": 1,
+      "claim": "A clearance nonce can be consumed at most once on a given host, including when multiple processes attempt consumption simultaneously.",
+      "scope": {
+        "artifact": "exercise/clearance.py consume()",
+        "concurrency": "multi-process, same host"
+      },
+      "mechanism": {
+        "construction": "Cross-platform exclusive advisory lock (msvcrt.locking / fcntl.flock) held across the entire read-modify-write of the nonce ledger, with the updated ledger written via a unique fsynced temp file and atomic replace.",
+        "failure_mode_closed": "Concurrent readers previously all observed 'nonce absent' and all wrote."
+      },
+      "assumptions": [
+        "The filesystem honours the platform advisory lock used.",
+        "All consumers use this code path; nothing writes the ledger directly.",
+        "Participating processes run on the same host and see the same ledger file."
+      ],
+      "evidence": [
+        "exercise/tests/test_concurrency.py::NonceRaceTests::test_concurrent_consume_admits_exactly_one_winner (NEGATIVE - 5 of 6 processes consumed the same nonce with the lock removed)"
+      ],
+      "evidence_location": "exercise/tests/test_concurrency.py",
+      "limitations": [
+        "Replay protection is HOST-LOCAL. Two hosts with separate ledgers can each consume the same nonce; that requires a shared transactional store and is a deployment decision.",
+        "Advisory locking does not constrain a process that bypasses this code path or has write access to the ledger.",
+        "Verified at 12 workers x 25 rounds on Windows and in CI on Linux; not a proof for arbitrary concurrency."
+      ],
+      "regression_triggers": [
+        "Any change to consume(), the ledger format, or the lock helper.",
+        "Any new writer of the nonce ledger.",
+        "Moving clearance validation to a multi-host deployment."
+      ],
+      "owner": "Purple Team",
+      "independent_reviewer": null,
+      "status": "EVIDENCED",
+      "status_note": "Reported as a Medium error-handling defect; measurement showed replay protection did not hold at all under concurrency (3 of 6 processes succeeded on the same nonce, 12/12 rounds). Fix is falsification-verified: removing the lock restores the failure."
+    },
+    {
+      "claim_id": "AEGIS-RT-SCAN-SCOPE-001",
+      "version": 1,
+      "claim": "Offline source and repository-posture scans read only files inside the authorized root, including when a local attacker swaps a path between validation and read.",
+      "scope": {
+        "artifact": "aegis_rt/checks/safe_scan.py",
+        "consumers": [
+          "source.static",
+          "repository.posture"
+        ]
+      },
+      "mechanism": {
+        "construction": "no-follow bounded traversal + descriptor-inode binding: os.walk(followlinks=False) with realpath containment per component, then open(O_NOFOLLOW) and fstat(descriptor) compared against the traversal-time lstat before any content is read",
+        "traversal": "os.walk(followlinks=False) with realpath containment on every component, covering symlinks, junctions and mounts; bounded by an explicit entry limit that raises rather than truncating.",
+        "read": "File opened once with O_NOFOLLOW where available; fstat on the descriptor is compared against the lstat recorded during traversal. A mismatch in (st_dev, st_ino) refuses the read. All content is read from that descriptor, so no second path lookup exists to race."
+      },
+      "assumptions": [
+        "The filesystem reports stable, distinct (st_dev, st_ino) for distinct files.",
+        "realpath resolution is accurate at traversal time.",
+        "The scanner process is not itself compromised."
+      ],
+      "evidence": [
+        "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_replaced_file_is_refused (NEGATIVE)",
+        "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_symlink_swapped_in_is_refused (NEGATIVE - skips without symlink privilege, runs in Linux CI)",
+        "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_unchanged_file_is_still_read (POSITIVE - guards against over-refusal)",
+        "red-team/tests/test_scan_race.py::TraversalTests::test_directory_link_out_of_scope_is_not_traversed (NEGATIVE)",
+        "red-team/tests/test_scan_race.py::TraversalTests::test_traversal_limit_refuses_rather_than_truncating (NEGATIVE)",
+        "red-team/tests/test_scan_race.py::ScannerRaceInjectionTests::test_source_scan_does_not_read_swapped_in_target (NEGATIVE - end-to-end race injection)",
+        "red-team/tests/test_scan_race.py::ScannerRaceInjectionTests::test_repository_scan_does_not_read_swapped_in_target (NEGATIVE - end-to-end race injection)"
+      ],
+      "evidence_location": "red-team/tests/test_scan_race.py",
+      "limitations": [
+        "The containment decision is time-of-check; the inode binding is what makes it hold at time-of-use. A root directory itself replaced before traversal begins is out of scope for this control.",
+        "The symlink-swap evidence skips on Windows hosts without SeCreateSymbolicLink privilege; it executes in Linux CI. The race-injection tests fall back to a real file replacement and run on every platform.",
+        "Does not defend against an attacker who can modify file contents in place without changing the inode."
+      ],
+      "regression_triggers": [
+        "Any change to safe_scan.py or to how the scanners enumerate or read files.",
+        "Adding a new PATH-target check that does its own traversal.",
+        "Python version changes affecting os.walk or realpath symlink/junction semantics."
+      ],
+      "owner": "Red Team",
+      "independent_reviewer": null,
+      "status": "EVIDENCED",
+      "status_note": "Closes the external assessment's residual High. Falsification-verified: removing the inode binding makes both end-to-end scanner tests read out-of-scope content."
     }
   ]
 }
