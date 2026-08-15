@@ -368,7 +368,15 @@ def _walk_packages(unique_paths, work):
             unresolvable.append(f"{test_path}: {type(exc).__name__}")
             continue
         if proc.returncode not in (0, 5):        # 5 = no tests ran
-            unresolvable.append(f"{test_path}: pytest exit {proc.returncode}")
+            # CI-RED investigation (2026-08-15): this previously recorded only the
+            # bare exit code. On an actual CI run that showed "pytest exit 1" for
+            # every package, that told us pytest RAN and something failed, but not
+            # WHAT - the real detail (which test, which assertion) was being
+            # discarded. Keep the tail of output; a real failure reason is short,
+            # and this only fires on the already-exceptional path.
+            tail = (proc.stdout + proc.stderr).strip().splitlines()[-8:]
+            detail = " | ".join(line.strip() for line in tail if line.strip())
+            unresolvable.append(f"{test_path}: pytest exit {proc.returncode} :: {detail}")
             continue
         for line in proc.stdout.splitlines():
             line = line.strip()
