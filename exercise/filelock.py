@@ -49,7 +49,18 @@ else:
     import fcntl
 
     def _lock(handle) -> None:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        # SONNET-R2-F1 follow-up (CI-caught, 2026-08-15): the Windows branch above was
+        # fixed for exactly this defect, but this branch was never touched, so the same
+        # bug survived here - and worse, since flock(LOCK_EX) has no internal retry limit
+        # at all: it blocks INDEFINITELY, not just for an internal ~10-attempt window. A
+        # single call can absorb the caller's entire `timeout`, and then some, with the
+        # Python-level deadline loop below never getting a chance to run.
+        #
+        # LOCK_NB makes flock() genuinely non-blocking: it raises immediately (an OSError,
+        # already handled by the existing retry loop's `except OSError`) if the lock is
+        # held, making that Python-level poll-and-sleep loop the only thing governing wait
+        # time - matching the Windows branch and what `timeout`'s contract requires.
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     def _unlock(handle) -> None:
         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
