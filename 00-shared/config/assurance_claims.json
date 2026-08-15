@@ -812,13 +812,13 @@
         "00-shared/tools/test_ci_integrity.py::CiSeparationTests::test_issuance_workflow_never_permits_a_readiness_hold",
         "00-shared/tools/test_ci_integrity.py::CiSeparationTests::test_no_third_workflow_silently_issues_assurance",
         "00-shared/tools/test_ci_integrity.py::CiSeparationTests::test_engineering_workflow_does_not_claim_readiness",
-        "falsification: injecting --allow-not-ready into assessment-issuance.yml FAILS 2 tests (verified 2026-08-14)",
-        "00-shared/tools/run_ci.py (local execution, 9/9 gates)"
+        "falsification: injecting --allow-not-ready into assessment-issuance.yml FAILS 2 tests (verified 2026-08-14)"
       ],
       "limitations": [
         "Guards the workflow files only. A runner configured outside these files, or a manually dispatched job, is not covered.",
         "Cannot prevent a human running the validator locally and quoting the result.",
-        "Corrected 2026-08-14: v1 asserted CI enforcement while the workflows sat at a nested path GitHub Actions never reads. The separation is now guarded at the repository root and by the local runner."
+        "Corrected 2026-08-14: v1 asserted CI enforcement while the workflows sat at a nested path GitHub Actions never reads. The separation is now guarded at the repository root and by the local runner.",
+        "Removed an unfalsifiable evidence entry (\"run_ci.py (local execution, 9/9 gates)\") 2026-08-15: a one-time local-run description is not a repeatable, resolvable test citation, and the F7 evidence-resolution check correctly refused it. The three real test citations already listed, plus the falsification note, fully support this claim without it."
       ],
       "regression_triggers": [
         "workflow_file_change",
