@@ -58,8 +58,20 @@ def run_gate(gate: dict) -> tuple[bool, float, str]:
     if gate.get("pythonpath"):
         env["PYTHONPATH"] = str(PROGRAM / gate["pythonpath"])
     t0 = time.time()
-    proc = subprocess.run(build_command(gate), cwd=str(PROGRAM), env=env,
-                          capture_output=True, text=True)
+    # LOW (static sweep, 2026-08-15): every sibling gate-runner in this program times
+    # out its subprocess (claim_check.py: 300s per pytest invocation,
+    # ci_unittest_gate.py: 120s) except this one. A hung gate previously hung the
+    # entire local CI run with no way out short of killing it by hand. 1200s covers
+    # the realistic worst case with real margin: the gate-drift gate's own
+    # claim_check.py sub-invocation walks up to 8 packages at up to 300s each if every
+    # one were maximally slow, and the actual measured full pass completes in well
+    # under a minute.
+    try:
+        proc = subprocess.run(build_command(gate), cwd=str(PROGRAM), env=env,
+                              capture_output=True, text=True, timeout=1200)
+    except subprocess.TimeoutExpired as exc:
+        output = ((exc.stdout or "") + (exc.stderr or "")).strip()
+        return False, time.time() - t0, (output + "\nTIMED OUT after 1200s").strip()
     return proc.returncode == 0, time.time() - t0, (proc.stdout + proc.stderr).strip()
 
 
