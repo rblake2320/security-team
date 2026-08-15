@@ -14,6 +14,7 @@ mocked lock would prove only that the mock works.
 
 from __future__ import annotations
 
+import json
 import multiprocessing as mp
 import sys
 import unittest
@@ -22,6 +23,7 @@ from pathlib import Path
 EXERCISE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(EXERCISE))
 
+import clearance  # noqa: E402
 
 WORKERS = 6
 ROUNDS = 3
@@ -81,6 +83,56 @@ class NonceRaceTests(unittest.TestCase):
                     f"round {round_index}: losers must get typed CLEARANCE-REPLAY refusals, "
                     f"got: {sorted(outcomes)}",
                 )
+
+
+class LockFailureTests(unittest.TestCase):
+    """Lock/filesystem failures must be TYPED refusals, not raw OS exceptions.
+
+    Self-found while attacking the AUD-02 fix. An attacker who cannot break the lock
+    can still squat the sibling lock path - creating `used_nonces.json.lock` as a
+    DIRECTORY makes the open fail. Before the fix that surfaced as a raw
+    PermissionError, escaping the typed-refusal contract callers rely on to fail
+    closed. Same defect class as AUD-05 and AUD-06.
+
+    It failed closed either way; the defect is that the refusal was not auditable and
+    a caller catching ClearanceError would have missed it.
+    """
+
+    def test_squatted_lock_path_gives_typed_refusal(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "used_nonces.json"
+            ledger.write_text("{}", encoding="utf-8")
+            (Path(tmp) / "used_nonces.json.lock").mkdir()   # squat the lock path
+
+            original = clearance.NONCE_LEDGER
+            clearance.NONCE_LEDGER = ledger
+            try:
+                with self.assertRaises(clearance.ClearanceError) as caught:
+                    clearance.consume("squat-nonce", "EX-LOCKFAIL")
+                self.assertIn("CLEARANCE-LEDGER-UNAVAILABLE", str(caught.exception))
+            finally:
+                clearance.NONCE_LEDGER = original
+
+    def test_normal_path_still_consumes(self) -> None:
+        """Guard against the translation being so broad it swallows success."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "used_nonces.json"
+            ledger.write_text("{}", encoding="utf-8")
+            original = clearance.NONCE_LEDGER
+            clearance.NONCE_LEDGER = ledger
+            try:
+                clearance.consume("ok-nonce", "EX-LOCKFAIL")
+                self.assertIn("ok-nonce", json.loads(ledger.read_text(encoding="utf-8")))
+                # ...and a genuine replay is still a REPLAY, not swallowed as UNAVAILABLE
+                with self.assertRaises(clearance.ClearanceError) as caught:
+                    clearance.consume("ok-nonce", "EX-LOCKFAIL")
+                self.assertIn("CLEARANCE-REPLAY", str(caught.exception))
+            finally:
+                clearance.NONCE_LEDGER = original
 
 
 class AtomicWriteTests(unittest.TestCase):

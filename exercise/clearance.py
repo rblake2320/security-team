@@ -244,6 +244,29 @@ def consume(nonce: str, exercise_id: str, *, now: datetime | None = None) -> Non
     from filelock import atomic_write, exclusive_lock
 
     now = now or datetime.now(UTC)
+    try:
+        _consume_locked(nonce, exercise_id, now, exclusive_lock, atomic_write)
+    except ClearanceError:
+        raise                                   # already a typed refusal; do not re-wrap
+    except (OSError, TimeoutError) as exc:
+        # SELF-FOUND while attacking this fix. Squatting the sibling lock path (e.g.
+        # creating `used_nonces.json.lock` as a DIRECTORY) made consume() raise a raw
+        # PermissionError, and lock starvation raises a raw TimeoutError. Both escape
+        # the typed-refusal contract every caller relies on to fail closed - the same
+        # defect class as AUD-05 and AUD-06.
+        #
+        # Still fails closed either way: no nonce is recorded and no exercise proceeds.
+        # But an untyped exception is not an auditable refusal, and a caller catching
+        # ClearanceError would not catch it.
+        raise ClearanceError(
+            "REFUSED [CLEARANCE-LEDGER-UNAVAILABLE] the nonce ledger could not be "
+            f"locked or written ({type(exc).__name__}); replay protection cannot be "
+            "established, so execution is refused") from exc
+
+
+def _consume_locked(nonce, exercise_id, now, exclusive_lock, atomic_write) -> None:
+    """The locked critical section. Split out so `consume` can translate lock and
+    filesystem failures into typed refusals without wrapping its own refusals."""
     with exclusive_lock(NONCE_LEDGER):
         used = {}
         if NONCE_LEDGER.exists():
