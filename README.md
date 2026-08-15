@@ -115,6 +115,7 @@ Every team folder has the same shape:
 | 19 | [`19_aegis_trust_model.md`](00-shared/19_aegis_trust_model.md) | §20 **Five-key trust model** — authorization / execution / evidence / assessment / revocation |
 | 20 | [`20_closure_plan.md`](00-shared/20_closure_plan.md) | §21 **Closure plan** — the seven open items, in prescribed order |
 | 21 | [`21_readiness_gate.md`](00-shared/21_readiness_gate.md) | §22 **Readiness gate + state model** — automated by `PROGRAM-READINESS-GATE-001`; what may and may not be called assurance |
+| 24 | [`24_incident_2026-08-15_recursive_process_exhaustion.md`](00-shared/24_incident_2026-08-15_recursive_process_exhaustion.md) | Incident record — not part of the §-numbered sequence. Root cause, fixes, and open items for the 2026-08-15 recursive-spawn host crash. (Docs 22–23 exist on disk but are not yet indexed here — pre-existing, not addressed by this entry.) |
 
 ### Team charters (§2)
 
