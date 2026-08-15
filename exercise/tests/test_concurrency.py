@@ -24,6 +24,7 @@ EXERCISE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(EXERCISE))
 
 import clearance  # noqa: E402
+import filelock  # noqa: E402
 
 WORKERS = 6
 ROUNDS = 3
@@ -218,3 +219,55 @@ class PruneInvariantTests(unittest.TestCase):
             clearance.NONCE_RETENTION_SECONDS, clearance.CLEARANCE_TTL_SECONDS,
             "retention below the TTL opens a live replay window when pruning runs",
         )
+
+
+class LockTimeoutPrecisionTests(unittest.TestCase):
+    """SONNET-R2-F1 (external review, reproduced): a caller-requested short timeout
+    must actually bound the wait, not be silently absorbed by an internal C-runtime
+    retry the Python-level deadline loop can't see.
+
+    Reproduced pre-fix: a real separate process held the lock for 3s; a caller
+    requesting timeout=1.0 acquired successfully at ~3s with no exception at all -
+    the timeout contract was not honoured even in the failure-signalling sense.
+    """
+
+    def test_short_timeout_is_honoured_against_a_real_holder(self) -> None:
+        import subprocess
+        import sys
+        import tempfile
+        import time
+
+        holder_script = (
+            "import sys, time\n"
+            "sys.path.insert(0, sys.argv[2])\n"
+            "import filelock\n"
+            "from pathlib import Path\n"
+            "with filelock.exclusive_lock(Path(sys.argv[1]), timeout=30.0):\n"
+            "    print('ACQUIRED', flush=True)\n"
+            "    time.sleep(3.0)\n"
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "target.txt"
+            script = Path(directory) / "holder.py"
+            script.write_text(holder_script, encoding="utf-8")
+            holder = subprocess.Popen(
+                [sys.executable, str(script), str(target), str(EXERCISE)],
+                stdout=subprocess.PIPE, text=True,
+            )
+            try:
+                line = holder.stdout.readline()
+                self.assertIn("ACQUIRED", line, "precondition: holder must confirm it holds the lock")
+
+                start = time.monotonic()
+                with self.assertRaises(TimeoutError):
+                    with filelock.exclusive_lock(target, timeout=1.0):
+                        pass
+                elapsed = time.monotonic() - start
+
+                self.assertLess(
+                    elapsed, 2.5,
+                    f"timeout=1.0 took {elapsed:.2f}s to raise - the requested bound "
+                    "was not honoured, an internal retry likely absorbed it",
+                )
+            finally:
+                holder.wait(timeout=10)

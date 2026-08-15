@@ -27,8 +27,20 @@ if os.name == "nt":
     import msvcrt
 
     def _lock(handle) -> None:
-        # Blocking exclusive lock on one byte; retried by the caller's loop.
-        msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+        # SONNET-R2-F1 (external review, 2026-08-15, reproduced): LK_LOCK is
+        # BLOCKING and retries INTERNALLY, inside the C runtime, up to ~10 times
+        # before raising - a window invisible to and unbounded by the caller's own
+        # `timeout`/deadline loop below. Reproduced with a real separate process
+        # holding the lock and a caller requesting timeout=1.0: the call returned
+        # success at ~3s (when the holder released), no TimeoutError, no exception
+        # at all - the Python-level deadline check never got a chance to fire
+        # because the single _lock() call it was waiting on hadn't returned yet.
+        #
+        # LK_NBLCK is genuinely non-blocking: it raises immediately if the byte is
+        # locked, with no internal retry. That makes the Python-level poll-and-sleep
+        # loop below the ONLY thing governing wait time, which is what the
+        # `timeout` parameter's contract requires.
+        msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
 
     def _unlock(handle) -> None:
         handle.seek(0)
