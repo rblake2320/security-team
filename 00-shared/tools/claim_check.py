@@ -78,7 +78,7 @@ def load(p):
 def md_files():
     out = []
     for base, dirs, files in os.walk(ROOT):
-        dirs[:] = [d for d in dirs if d not in {".git", "__pycache__", ".ruff_cache", "node_modules"}]
+        dirs[:] = [d for d in dirs if d not in {".git", "__pycache__", ".ruff_cache", "node_modules", ".pytest_cache"}]
         for fn in files:
             if fn.endswith(".md"):
                 out.append(os.path.join(base, fn))
