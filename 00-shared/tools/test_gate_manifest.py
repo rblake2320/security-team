@@ -164,3 +164,68 @@ class ReadinessDerivationTests(unittest.TestCase):
             d["status"] = "VERIFIED"
         failed, _ = cc.check_gates(gates)
         self.assertEqual(failed, [], "genuinely verified gates must still pass")
+
+
+class ClaimGateDoesNotMutateTreeTests(unittest.TestCase):
+    """R2-F9: the gate must never write to the artifacts it verifies.
+
+    Reproduced before the fix: one claim_check run left three files modified -
+    exercise/white/authorization.json, environment_attestation.json, and an EVIDENCE
+    receipt - each a changed signature. The gate was minting fresh signatures for the
+    signed authorization it exists to verify, which means signing authority was live
+    in the verification environment and a clean tree could never be a CI precondition.
+
+    Introduced by the F1 fix (running the suites) and widened from 2 files to 3 by
+    moving to -v. Suites now execute against a throwaway copy.
+
+    STRUCTURAL NOTE: this test itself caused a SEPARATE, more severe incident -
+    unbounded recursive process spawning, since claim_check.py's own evidence
+    collection runs this very package and this test spawns claim_check.py. It now
+    self-skips via CLAIM_CHECK_RECURSION_GUARD whenever it detects it is running
+    inside claim_check's own evidence-collection pass. Consequence: this test can
+    NEVER be cited as R5-verified evidence for any claim - from claim_check's own
+    perspective it always appears SKIPPED, because resolving evidence is exactly the
+    context in which it must refuse to run. This is intentional, not a gap; the
+    property it tests is instead verified directly by `run_ci.py`'s gate-drift step
+    and by manual `pytest 00-shared/tools`, neither of which set the guard.
+    """
+
+    def test_full_gate_run_leaves_the_tree_unmodified(self):
+        import os as _os
+        import subprocess as _sp
+        import sys as _sys
+
+        # CRITICAL RECURSION GUARD, checked FIRST, before anything else in this
+        # method. claim_check.py's own evidence collection runs the "00-shared/tools"
+        # package - which is THIS file. Without this check, this test spawns
+        # claim_check.py, whose collect_node_ids() runs this package again, hitting
+        # this same test again, spawning claim_check.py again: unbounded recursive
+        # process spawning. Measured live: 100+ python.exe processes, tens of GB of
+        # RAM, in under 4 minutes, reachable through completely ordinary
+        # `run_ci.py` execution. claim_check.py sets CLAIM_CHECK_RECURSION_GUARD in
+        # the environment of every subprocess its own evidence collection spawns;
+        # seeing it here means we ARE that spawned subprocess, and must not spawn
+        # another one. (There is also a second, independent guard inside
+        # collect_node_ids() itself - defense in depth, not a substitute for this one.)
+        if _os.environ.get("CLAIM_CHECK_RECURSION_GUARD"):
+            self.skipTest(
+                "running inside claim_check's own evidence collection; spawning "
+                "another claim_check.py here would recurse unboundedly")
+
+        root = _os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
+        if _sp.run(["git", "rev-parse", "--git-dir"], cwd=root,
+                   capture_output=True).returncode != 0:
+            self.skipTest("not a git checkout")
+
+        before = _sp.run(["git", "status", "--porcelain"], cwd=root,
+                         capture_output=True, text=True).stdout
+        _sp.run([_sys.executable, _os.path.join("00-shared", "tools", "claim_check.py")],
+                cwd=root, capture_output=True, text=True, timeout=900)
+        after = _sp.run(["git", "status", "--porcelain"], cwd=root,
+                        capture_output=True, text=True).stdout
+
+        self.assertEqual(
+            sorted(after.splitlines()), sorted(before.splitlines()),
+            "claim_check modified the working tree; a gate must not write to what it "
+            "verifies",
+        )

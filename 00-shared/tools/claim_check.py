@@ -23,12 +23,25 @@ import argparse
 import hashlib
 import json
 import os
+import pathlib
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CLAIMS = os.path.join(ROOT, "00-shared", "config", "assurance_claims.json")
 GATES = os.path.join(ROOT, "00-shared", "config", "assessment_readiness.json")
+
+# Set in the environment of every subprocess collect_node_ids() spawns. Any test that
+# itself invokes this script MUST check for this variable and skip rather than spawn
+# another instance - see the incident note on collect_node_ids() and on
+# test_gate_manifest.ClaimGateDoesNotMutateTreeTests. Without this, evidence collection
+# for the 00-shared/tools package recursively re-invoked this script, which recursively
+# re-collected evidence, unbounded - measured at 100+ live processes and tens of GB of
+# RAM in under 4 minutes before being caught and killed by hand.
+RECURSION_GUARD_ENV = "CLAIM_CHECK_RECURSION_GUARD"
 
 # R1: normative assurance vocabulary. Deliberately over-inclusive; triage is the point.
 NORMATIVE = re.compile(
@@ -45,6 +58,7 @@ EXEMPT_LINE = re.compile(
     r"^\s*\|?\s*R\d\b|rejection rule|banned|anti-pattern|failure indicator)", re.IGNORECASE)
 
 NEGATIVE_HINT = re.compile(r"(WRONG|TAMPER|FAIL|REJECT|DENIED|NEGATIVE|ENUMERATION|BOUNDARY|UNKNOWN)", re.I)
+CODE_EVIDENCE = re.compile(r"\.(py|js|ts|go|rs|java|rb|sh|ps1)$", re.I)
 DOC_ONLY = re.compile(r"\.(md|txt|rst)(::|$)|^docs?/", re.I)
 
 
@@ -208,20 +222,133 @@ def collect_node_ids():
     Collected once per package (~8 pytest invocations) rather than once per evidence
     entry, so this stays fast enough to run on every gate execution.
     """
-    import subprocess
-
     gates = load(os.path.join(ROOT, "00-shared", "config", "ci_gates.json"))
-    found, unresolvable, skipped = set(), [], set()
+
+    # CRITICAL, self-found live during this review: multiple gate entries in
+    # ci_gates.json share path "00-shared/tools" (repo-hygiene, ci-separation,
+    # gate-drift, commitment). Iterating gate entries reran that SAME directory
+    # once per entry. Combined with the recursion below, that gave a branching
+    # factor of ~4 per recursion level - true exponential blowup, not a fixed
+    # linear cost. Iterate unique test paths, not gate entries.
+    unique_paths = []
+    seen_paths = set()
     for gate in gates["engineering_gates"]:
         if gate.get("kind") != "unittest":
             continue
+        key = (gate.get("path", ""), gate.get("pythonpath", ""))
+        if key not in seen_paths:
+            seen_paths.add(key)
+            unique_paths.append(gate)
+
+    # R2-F9 (opus, reproduced): running the suites made this gate MUTATE AND RE-SIGN
+    # the very artifacts it verifies - exercise/white/authorization.json,
+    # environment_attestation.json, and an evidence receipt - because the exercise
+    # tests call make_fixture_trust.ensure(). A verification gate that mints fresh
+    # signatures for signed authorization means signing authority is present in the
+    # verification environment, and a clean tree can never be a CI precondition.
+    # My own F1 fix introduced this, and moving to -v widened it from 2 files to 3.
+    #
+    # Execute against a throwaway copy. The tree under review is never written to.
+    sandbox = tempfile.mkdtemp(prefix="claimcheck-")
+    ignore = shutil.ignore_patterns(".git", "__pycache__", ".ruff_cache", ".pytest_cache")
+    work = os.path.join(sandbox, "repo")
+    try:
+        shutil.copytree(ROOT, work, ignore=ignore, symlinks=True)
+    except OSError as exc:
+        shutil.rmtree(sandbox, ignore_errors=True)
+        return set(), [f"sandbox copy failed: {exc}"], set()
+
+    # MEDIUM (static sweep, 2026-08-15): cleanup previously ran only via the OSError
+    # branch above and via unconditional fall-through at the end of the loop. Any
+    # OTHER exception raised mid-loop - a bug in a future edit here, an unexpected
+    # subprocess/OS error not already caught below, a KeyboardInterrupt - skipped
+    # cleanup entirely and leaked the sandbox copy. This is the exact shape of the
+    # already-disclosed 325-directory/668MB leak, just not fully closed by that fix.
+    # try/finally makes cleanup unconditional on how the loop exits, not on which
+    # exception types were anticipated when it was written.
+    try:
+        return _walk_packages(unique_paths, work)
+    finally:
+        shutil.rmtree(sandbox, ignore_errors=True)
+
+
+def _walk_packages(unique_paths, work):
+    """The per-package pytest-invocation loop, split out of `collect_node_ids` so its
+    caller can guarantee sandbox cleanup with try/finally regardless of how this exits."""
+    found, unresolvable, skipped = set(), [], set()
+    for gate in unique_paths:
         test_path = gate.get("path", "")
-        package = test_path.split("/")[0] if "/" in test_path else ""
-        cwd = os.path.join(ROOT, package) if package else ROOT
+        # Compare path COMPONENTS, not a raw string. sonnet's finding (crash-debate
+        # cross-exam, 2026-08-15): a naive `test_path.split("/")[0] == "00-shared"`
+        # silently fails to match an absolute path, a "./00-shared/..." prefix, a
+        # backslash-separated path, or a case difference on a case-insensitive mount -
+        # any of which would make this layer's check evaluate False and skip straight
+        # past it without firing. Verified NOT reachable today (ci_gates.json's four
+        # 00-shared/tools entries are all the literal string "00-shared/tools"), but a
+        # future config edit or a Windows/Linux path-separator difference could
+        # reintroduce it silently. PurePosixPath(...).parts normalizes both slash
+        # directions and strips a leading "./", so this holds regardless of how the
+        # path string is spelled.
+        package = pathlib.PurePosixPath(test_path.replace("\\", "/")).parts[0] if test_path else ""
+        # ONE computed boolean, reused everywhere `package` needs to mean "the
+        # 00-shared/tools meta-package". Previously this was checked twice with two
+        # DIFFERENT comparisons (`package == "00-shared"` here, case-sensitive; a
+        # separate `.lower()` comparison at the recursion guard below) - found while
+        # hardening the guard: if `package` ever derived to a different case, the two
+        # checks would DISAGREE, silently routing 00-shared/tools tests to the
+        # .git-less sandbox instead of the real tree they need (see the comment two
+        # lines below), rather than failing safely. One boolean removes the
+        # possibility of the two checks drifting apart.
+        is_meta_tools = package.lower() == "00-shared"
+        # DEFENSE IN DEPTH, layer 2. Layer 1 is the guard-env check inside the test
+        # itself. This layer does not trust that every future test which spawns
+        # claim_check.py will remember to check it: if THIS process is already
+        # running inside a guarded (recursive) context, it refuses to walk into
+        # 00-shared/tools again at all, rather than relying solely on the child
+        # process behaving correctly.
+        if is_meta_tools and os.environ.get(RECURSION_GUARD_ENV):
+            unresolvable.append(
+                f"{test_path}: skipped - already inside a guarded recursive "
+                "evidence-collection context")
+            continue
+        # Tests under 00-shared/tools assert properties OF THE REPOSITORY - hygiene,
+        # CI reachability, gate-manifest drift - and are meaningless in a detached copy
+        # with no .git (207MB, far too large to clone per run). They are read-only with
+        # respect to the tree; that is not assumed, it is asserted by
+        # test_gate_manifest.ClaimGateDoesNotMutateTreeTests, which fails if a full gate
+        # run leaves ANY file modified.
+        base = ROOT if is_meta_tools else work
+        cwd = os.path.join(base, package) if package else base
         target = test_path[len(package) + 1:] if package else test_path
         env = dict(os.environ)
+        # CRITICAL, self-found live: this walked "00-shared/tools" using the REAL
+        # tree (base=ROOT, not the sandbox), and that directory's own
+        # test_gate_manifest.py contains a test that subprocess-spawns THIS SAME
+        # claim_check.py to check for tree mutation. That inner invocation called
+        # collect_node_ids() again, which ran "00-shared/tools" again, which spawned
+        # claim_check.py again - unbounded recursive process spawning, amplified by
+        # the ~4x path duplication above. Measured: 100+ live python.exe processes,
+        # tens of GB of RAM, in under 4 minutes, before it was caught and killed by
+        # hand. This is reachable through completely ordinary `run_ci.py` execution,
+        # not just an ad hoc test run.
+        #
+        # RECURSION_GUARD is set in every subprocess this function spawns. Any test
+        # that itself invokes claim_check.py MUST check for this and skip rather than
+        # spawn another instance - see test_gate_manifest.ClaimGateDoesNotMutateTreeTests.
+        env[RECURSION_GUARD_ENV] = "1"
         if gate.get("pythonpath"):
-            env["PYTHONPATH"] = os.path.join(ROOT, gate["pythonpath"])
+            env["PYTHONPATH"] = os.path.join(base, gate["pythonpath"])
+        # Pin the config explicitly. pytest walks UPWARD from cwd for a rootdir config;
+        # once execution moved into the sandbox it escaped the repo and found a broken
+        # pyproject.toml sitting in the system temp directory, failing every package
+        # with exit 4. Environment-dependent silent failure of exactly the kind that
+        # already bit this function once (blue-team addopts).
+        config = os.path.join(cwd, "pyproject.toml")
+        if not os.path.isfile(config):
+            config = os.path.join(work, "pytest-sandbox.ini")
+            if not os.path.isfile(config):
+                with open(config, "w", encoding="utf-8") as handle:
+                    handle.write("[pytest]\n")
         try:
             proc = subprocess.run(
                 # `-o addopts=` neutralises per-package addopts. blue-team's
@@ -234,7 +361,8 @@ def collect_node_ids():
                 # Collection alone includes SKIPPED tests, so proving a node id exists
                 # never proved it ran - the residual of opus F1 that I disclosed.
                 [sys.executable, "-m", "pytest", target, "-v", "--no-header",
-                 "--tb=no", "-p", "no:cacheprovider", "-o", "addopts="],
+                 "--tb=no", "-p", "no:cacheprovider", "-o", "addopts=",
+                 "-c", config, "--rootdir", cwd],
                 cwd=cwd, env=env, capture_output=True, text=True, timeout=300)
         except (OSError, subprocess.SubprocessError) as exc:
             unresolvable.append(f"{test_path}: {type(exc).__name__}")
@@ -265,17 +393,27 @@ def check_evidence(reg, node_ids, unresolvable, skipped=frozenset()):
     """
     violations = []
     if unresolvable:
-        # Cannot prove evidence exists -> cannot certify. Fail closed rather than
-        # silently treating an uncollectable package as having no bad evidence.
+        # Cannot prove evidence for those packages -> fail closed on them. But do NOT
+        # stop here. R2-F8 (opus): this early-returned, so ONE broken package
+        # suppressed evidence checking for EVERY claim - it invalidated opus's own
+        # first R2-F7 run, which they caught with a control before reporting.
         violations.append(("R5", "-", "evidence collection failed for: "
                            + "; ".join(unresolvable[:3])))
-        return violations
     for c in reg["claims"]:
         if c["status"] not in ("EVIDENCED", "INDEPENDENTLY_REVIEWED", "OPERATIONAL"):
             continue
         for item in (c.get("evidence") or []):
             ref = item.split(" (")[0].strip()
             if "::" not in ref:
+                # R2-F7 (opus): this `continue` reopened F1. A fictional code path with
+                # NO `::` was skipped by the resolver AND missed by R4, because R4 only
+                # fires when ALL evidence is doc-only. So one invented .py string was
+                # unverifiable evidence that no rule examined.
+                if CODE_EVIDENCE.search(ref):
+                    violations.append(
+                        ("R5", c["claim_id"],
+                         f"evidence names a code file but no test node id, so it cannot "
+                         f"be resolved: {ref[:60]}"))
                 continue                          # prose/doc evidence handled by R4
             normalised = ref.replace("\\", "/")
             if normalised not in node_ids:
