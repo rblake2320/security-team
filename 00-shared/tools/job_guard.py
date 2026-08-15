@@ -7,8 +7,20 @@ independently (opus, sonnet, cybersecurity) on why a `psutil`-polling watchdog i
 the right primary defense: it has a sampling interval, and between two polls a
 multiplicative spawn (this incident's exact shape) can burst past any threshold before
 anything notices. A Windows Job Object's `ActiveProcessLimit` is enforced by the KERNEL
-at `CreateProcess` time - there is no interval to miss a burst in. That is a categorical
-difference (allocation-time refusal vs. after-the-fact detection), not a matter of degree.
+at `CreateProcess` time - there is no interval to miss a burst in.
+
+PRECISION CAVEAT (sonnet, cross-examining the delivered version): what is directly,
+precisely documented by Microsoft is that the SPECIFIC process whose creation would
+push the job over `ActiveProcessLimit` is refused/terminated - not that the entire job
+is torn down as an automatic consequence. The anti-fork-bomb property this module
+relies on - that DESCENDANTS of the wrapped process inherit job membership and are
+therefore subject to the same limit - is standard, well-established Windows behavior,
+but has not yet been pinned to a citation as precise as the top-level explicit-
+assignment case, and has not yet been confirmed by an adversarial test under verified-
+calm system conditions (two independent memory-pressure reports disagreed on whether
+conditions actually cleared - see git history). Treat the "no interval to miss a burst
+in" claim as correct for the case tested (the offending new process refused outright);
+treat "the whole tree is contained" as the design intent, not yet empirically closed.
 
 The Windows path's process-creation dance (`CreateProcess` with `CREATE_SUSPENDED`,
 `AssignProcessToJobObject`, then `ResumeThread`) is opus's design
