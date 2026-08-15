@@ -120,11 +120,31 @@ def _identity(info: os.stat_result) -> tuple:
     authorized root", and that is carried by O_NOFOLLOW plus (dev, ino):
 
       * final-component symlink out of scope -> O_NOFOLLOW refuses the open
-      * hardlink to an out-of-scope file    -> carries that file's inode, so (dev, ino)
-                                               differs from what traversal validated
-      * swapped parent directory            -> resolves to a different inode, likewise
+      * hardlink SWAPPED IN AFTER traversal  -> carries that file's inode, so (dev, ino)
+                                                differs from what traversal validated
+      * swapped parent directory             -> resolves to a different inode, likewise
+
+    SONNET-01 (external review, reproduced): this list previously said "hardlink to an
+    out-of-scope file" without qualification. That was FALSE for a hardlink that already
+    exists when the scan starts. A hardlink is not a reference to another path - it is an
+    equal name for an inode - so `realpath` resolves it to its own in-root path and
+    traversal validates it as in scope. The identity check then compares the file to
+    itself and passes. Out-of-scope CONTENT was read. See `_multiply_linked`.
     """
     return (info.st_dev, info.st_ino, info.st_mode)
+
+
+def _multiply_linked(info: os.stat_result) -> bool:
+    """True when the inode has more than one name, so content may originate outside.
+
+    There is no portable way to enumerate an inode's other names, and no notion of a
+    'canonical' one - every hardlink is equally the file. So the only sound answer for a
+    tool whose authorized root IS its authorization boundary is to refuse to read it.
+
+    This is a deliberate, disclosed refusal rather than a silent skip: it is recorded in
+    the limitations of AEGIS-RT-SCAN-SCOPE-001 and pinned by a regression test.
+    """
+    return info.st_nlink > 1
 
 
 def _is_regular(info: os.stat_result) -> bool:
@@ -150,6 +170,12 @@ def read_verified(path: Path, expected: os.stat_result, *, max_bytes: int) -> st
             return None
         # THE check: the descriptor must be the file traversal validated as in scope.
         if _identity(actual) != _identity(expected):
+            return None
+        # SONNET-01: a pre-existing in-root hardlink to an out-of-scope file passes
+        # every check above - realpath resolves it to its own in-root path, and the
+        # identity comparison compares the file to itself. Reproduced: out-of-scope
+        # content WAS read. Refuse multiply-linked files outright.
+        if _multiply_linked(actual):
             return None
         # Defence in depth. The open pins the inode, so it cannot be recycled while we
         # hold the descriptor; re-stat'ing the PATH now and comparing tells us the path

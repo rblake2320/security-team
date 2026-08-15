@@ -260,3 +260,44 @@ class ScannerRaceInjectionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PreExistingHardlinkTests(unittest.TestCase):
+    """SONNET-01 (external review): a hardlink that exists BEFORE the scan.
+
+    Found by an independent reviewer, reproduced here before acceptance. A hardlink
+    is not a reference to another path - it is an equal name for an inode - so
+    realpath resolves it to its own in-root path, traversal validates it as in scope,
+    and the identity check compares the file to itself and passes. Out-of-scope
+    CONTENT was read. The docstring claimed hardlinks were covered; that was true only
+    for a hardlink swapped in AFTER traversal.
+    """
+
+    def test_preexisting_hardlink_to_out_of_scope_file_is_not_read(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "root"
+            root.mkdir()
+            outside = Path(directory) / "outside_secret.py"
+            outside.write_text(SECRET, encoding="utf-8")
+            try:
+                os.link(outside, root / "innocent.py")
+            except (OSError, NotImplementedError):
+                self.skipTest("hardlink creation unavailable in this environment")
+
+            leaked = []
+            for path, expected in walk_scope(root):
+                content = read_verified(path, expected, max_bytes=1_000_000)
+                if content and "outside-scope" in content:
+                    leaked.append(path.name)
+            self.assertEqual(
+                leaked, [],
+                "content reachable only via an out-of-scope inode must not be read",
+            )
+
+    def test_ordinary_single_linked_file_is_still_read(self) -> None:
+        """Refusing multiply-linked files must not become a blanket silent skip."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "plain.py").write_text("value = 1\n", encoding="utf-8")
+            read = [read_verified(p, e, max_bytes=1_000_000) for p, e in walk_scope(root)]
+            self.assertEqual(read, ["value = 1\n"])

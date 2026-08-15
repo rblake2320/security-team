@@ -20,6 +20,7 @@ Rejection rules (spec: 00-shared/22_assurance_claims.md):
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -45,6 +46,14 @@ EXEMPT_LINE = re.compile(
 
 NEGATIVE_HINT = re.compile(r"(WRONG|TAMPER|FAIL|REJECT|DENIED|NEGATIVE|ENUMERATION|BOUNDARY|UNKNOWN)", re.I)
 DOC_ONLY = re.compile(r"\.(md|txt|rst)(::|$)|^docs?/", re.I)
+
+
+def mechanism_digest(claim):
+    """Canonical digest of the claim's mechanism. Changing the mechanism changes this;
+    there is no field an author can omit to avoid it."""
+    body = json.dumps(claim.get("mechanism", {}), sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False)
+    return hashlib.sha256(body.encode("utf-8")).hexdigest()
 
 
 def load(p):
@@ -103,9 +112,23 @@ def check_claims(reg, gates_failed):
         if st == "OPERATIONAL" and gates_failed:
             v.append(("R6", cid, "OPERATIONAL while gates false: {}".format(",".join(gates_failed))))
 
-        # R7 - mechanism change without version increment
-        if c.get("mechanism_changed_at") and c.get("version_bumped_at") != c.get("mechanism_changed_at"):
-            v.append(("R7", cid, "mechanism changed without claim-version increment"))
+        # R7 - mechanism change without version increment.
+        # F2 (opus): this fired only on `mechanism_changed_at`, a field the CLAIM
+        # AUTHOR writes. Rewriting `mechanism.construction` to a materially different
+        # mechanism and simply OMITTING the field evaded the rule entirely - proven by
+        # PoC. Self-attestation detects an honest author and is silent against any
+        # other kind. Derive it: hash the mechanism, compare to the recorded digest.
+        digest = mechanism_digest(c)
+        recorded = c.get("mechanism_digest")
+        if st in ("EVIDENCED", "INDEPENDENTLY_REVIEWED", "OPERATIONAL"):
+            if not recorded:
+                v.append(("R7", cid, "no mechanism_digest recorded; mechanism changes "
+                                     "cannot be detected"))
+            elif recorded != digest:
+                v.append(("R7", cid,
+                          f"mechanism changed (digest {digest[:12]} != recorded "
+                          f"{recorded[:12]}) without re-recording it alongside a "
+                          "version increment"))
 
         # lifecycle sanity
         if st in ("INDEPENDENTLY_REVIEWED", "OPERATIONAL") and not c.get("independent_reviewer"):
@@ -126,9 +149,105 @@ def lint(reg):
                     continue
                 if infence or EXEMPT_LINE.search(line):
                     continue
-                if NORMATIVE.search(line) and not CLAIM_REF.search(line):
-                    hits.append((rel(path), n, line.strip()[:96]))
+                if NORMATIVE.search(line):
+                    # F3 (opus): `known` was computed and never used, so ANY
+                    # claim-shaped token licensed a normative sentence -
+                    # `TOTALLY-FAKE-CLAIM-999` passed clean. The escape hatch was
+                    # citing something that LOOKS like a claim ID, not a real one.
+                    refs = CLAIM_REF.findall(line)
+                    if not refs:
+                        hits.append((rel(path), n, line.strip()[:96]))
+                    elif not any(r in known for r in refs):
+                        hits.append((rel(path), n,
+                                     f"cites UNREGISTERED claim id {refs[0]}: "
+                                     + line.strip()[:70]))
+        # F4 (opus): an ODD number of fences left infence=True to EOF, silently
+        # suppressing R1 for the rest of the file - an ordinary markdown typo
+        # disabled the scanner. Fail closed: unlintable is not clean.
+        if infence:
+            hits.append((rel(path), 0,
+                         "UNBALANCED CODE FENCE - file is unlintable, R1 cannot be "
+                         "trusted for it; close the fence"))
     return hits, scanned, known
+
+
+def collect_node_ids():
+    """Every test node ID that actually EXISTS, repo-relative.
+
+    F1/F2 (opus): evidence was a STRING, never a resolved reference. A claim could
+    cite `tests/does_not_exist.py::test_fictional_BOUNDARY` and pass clean - proven
+    by PoC, 4/4 forged evidence sets accepted. `NEGATIVE_HINT` matched the string,
+    so an invented token also satisfied R3, and one invented non-doc entry defeated
+    R4's documentation-only check.
+
+    Collected once per package (~8 pytest invocations) rather than once per evidence
+    entry, so this stays fast enough to run on every gate execution.
+    """
+    import subprocess
+
+    gates = load(os.path.join(ROOT, "00-shared", "config", "ci_gates.json"))
+    found, unresolvable = set(), []
+    for gate in gates["engineering_gates"]:
+        if gate.get("kind") != "unittest":
+            continue
+        test_path = gate.get("path", "")
+        package = test_path.split("/")[0] if "/" in test_path else ""
+        cwd = os.path.join(ROOT, package) if package else ROOT
+        target = test_path[len(package) + 1:] if package else test_path
+        env = dict(os.environ)
+        if gate.get("pythonpath"):
+            env["PYTHONPATH"] = os.path.join(ROOT, gate["pythonpath"])
+        try:
+            proc = subprocess.run(
+                # `-o addopts=` neutralises per-package addopts. blue-team's
+                # pyproject sets addopts="-q"; combined with our own -q that becomes
+                # DOUBLE quiet, and pytest prints per-file COUNTS instead of node ids.
+                # The collector then silently saw zero blue-team tests and would have
+                # reported every blue claim as unresolved evidence - a false positive
+                # in the very gate meant to stop false confidence.
+                [sys.executable, "-m", "pytest", target, "--collect-only", "-q",
+                 "--no-header", "-p", "no:cacheprovider", "-o", "addopts="],
+                cwd=cwd, env=env, capture_output=True, text=True, timeout=300)
+        except (OSError, subprocess.SubprocessError) as exc:
+            unresolvable.append(f"{test_path}: {type(exc).__name__}")
+            continue
+        if proc.returncode not in (0, 5):        # 5 = no tests collected
+            unresolvable.append(f"{test_path}: pytest exit {proc.returncode}")
+            continue
+        for line in proc.stdout.splitlines():
+            line = line.strip()
+            if "::" not in line or line.startswith(("=", "<", "ERROR", "FAILED")):
+                continue
+            found.add(f"{package}/{line}".replace("\\", "/") if package else line)
+    return found, unresolvable
+
+
+def check_evidence(reg, node_ids, unresolvable):
+    """R5, honestly: does the cited evidence resolve to a test that exists?
+
+    The spec promises detection of 'skipped or stale' tests. The implementation read
+    `evidence_gap` - a field the CLAIM AUTHOR writes - so an author who simply omits
+    it was compliant by construction (F2). Derive it instead.
+    """
+    violations = []
+    if unresolvable:
+        # Cannot prove evidence exists -> cannot certify. Fail closed rather than
+        # silently treating an uncollectable package as having no bad evidence.
+        violations.append(("R5", "-", "evidence collection failed for: "
+                           + "; ".join(unresolvable[:3])))
+        return violations
+    for c in reg["claims"]:
+        if c["status"] not in ("EVIDENCED", "INDEPENDENTLY_REVIEWED", "OPERATIONAL"):
+            continue
+        for item in (c.get("evidence") or []):
+            ref = item.split(" (")[0].strip()
+            if "::" not in ref:
+                continue                          # prose/doc evidence handled by R4
+            if ref.replace("\\", "/") not in node_ids:
+                violations.append(
+                    ("R5", c["claim_id"],
+                     f"evidence does not resolve to any collected test: {ref[:70]}"))
+    return violations
 
 
 def main():
@@ -163,6 +282,9 @@ def main():
     viol = []
     if allc:
         viol = check_claims(reg, failed)
+        # F1/F2 (opus): resolve cited evidence instead of trusting the string.
+        node_ids, unresolvable = collect_node_ids()
+        viol += check_evidence(reg, node_ids, unresolvable)
         by = {}
         for r, cid, msg in viol:
             by.setdefault(cid, []).append((r, msg))

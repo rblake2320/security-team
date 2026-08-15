@@ -80,7 +80,8 @@
       "owner": "Exercise Assurance",
       "independent_reviewer": null,
       "status": "EVIDENCED",
-      "status_note": "Cannot reach INDEPENDENTLY_REVIEWED until an EA performer exists (readiness gate 'exercise_assurance_operational' is PENDING)."
+      "status_note": "Cannot reach INDEPENDENTLY_REVIEWED until an EA performer exists (readiness gate 'exercise_assurance_operational' is PENDING).",
+      "mechanism_digest": "4ab809a4331b9df796a3c109a0d2ebc1442d52baf145ce4951d4e18b540f51d6"
     },
     {
       "claim_id": "AEGIS-COMMIT-BINDING-001",
@@ -114,7 +115,8 @@
       ],
       "owner": "Exercise Assurance",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "a338802d9fe9568009effaa4abfd1db98706347bbed4ea31571825de6d229985"
     },
     {
       "claim_id": "AEGIS-SOD-AUTHZ-001",
@@ -145,7 +147,8 @@
       "owner": "White + CISO",
       "independent_reviewer": null,
       "status": "MECHANISM_IDENTIFIED",
-      "status_note": "The mechanism exists in code. The claim is NOT evidenced: nobody has attempted to authorize as Red and been denied."
+      "status_note": "The mechanism exists in code. The claim is NOT evidenced: nobody has attempted to authorize as Red and been denied.",
+      "mechanism_digest": "4535e937b8ee93d49a0ea526dee5989e505f3e39811f09ec8f2ee9db61539531"
     },
     {
       "claim_id": "AEGIS-EVIDENCE-INDEPENDENCE-001",
@@ -162,9 +165,9 @@
         "Purpose metadata and distinct public-key pins are deployed from reviewed configuration."
       ],
       "evidence": [
-        "red-team/tests/test_audit.py::test_signed_seal_rejects_recomputed_chain",
-        "red-team/tests/test_audit.py::test_authorization_key_cannot_seal_evidence",
-        "red-team/tests/test_authorization.py::test_evidence_key_cannot_authorize"
+        "red-team/tests/test_audit.py::AuditLedgerTests::test_signed_seal_rejects_recomputed_chain",
+        "red-team/tests/test_audit.py::AuditLedgerTests::test_authorization_key_cannot_seal_evidence",
+        "red-team/tests/test_authorization.py::AuthorizationTests::test_evidence_key_cannot_authorize"
       ],
       "limitations": [
         "The implementation prevents cross-purpose use through its supported API. Host administrators with raw private-key access can bypass application controls; production custody must enforce separation independently."
@@ -177,7 +180,8 @@
       "status": "EVIDENCED",
       "mechanism_changed_at": "2026-08-14-key-purpose-split",
       "version_bumped_at": "2026-08-14-key-purpose-split",
-      "status_note": "Migration step 1 is implemented and falsification-tested. Operational independence still depends on the separate production-custody gate."
+      "status_note": "Migration step 1 is implemented and falsification-tested. Operational independence still depends on the separate production-custody gate.",
+      "mechanism_digest": "91c54f9a671e5e38a53639a2bb7c7a3f31ce0b5728873f21a76d39211f58b3de"
     },
     {
       "claim_id": "AEGIS-LEDGER-TAMPER-001",
@@ -193,11 +197,11 @@
         "An attacker cannot rewrite the whole file and recompute the chain undetected. Explicitly out of scope - external anchoring required."
       ],
       "evidence": [
-        "red-team/tests/test_audit.py::test_chain_verifies_and_tampering_is_detected",
-        "red-team/tests/test_audit.py::test_chain_detects_interior_deletion",
-        "blue-team/tests/test_detection_store.py::test_audit_chain_detects_mutation",
-        "blue-team/tests/test_detection_store.py::test_audit_chain_detects_interior_deletion",
-        "blue-team/tests/test_detection_store.py::test_audit_chain_detects_tail_deletion"
+        "red-team/tests/test_audit.py::AuditLedgerTests::test_chain_verifies_and_tampering_is_detected",
+        "red-team/tests/test_audit.py::AuditLedgerTests::test_chain_detects_interior_deletion",
+        "blue-team/tests/test_detection_store.py::DetectionStoreTests::test_audit_chain_detects_mutation",
+        "blue-team/tests/test_detection_store.py::DetectionStoreTests::test_audit_chain_detects_interior_deletion",
+        "blue-team/tests/test_detection_store.py::DetectionStoreTests::test_audit_chain_detects_tail_deletion"
       ],
       "limitations": [
         "Does not detect rollback or deletion of the entire store. Both projects state this."
@@ -209,7 +213,8 @@
       "owner": "Red Lead",
       "independent_reviewer": null,
       "status": "EVIDENCED",
-      "status_note": "Positive and falsification tests now cover mutation and interior deletion in both implementations. Whole-store rollback remains explicitly excluded and requires external anchoring."
+      "status_note": "Positive and falsification tests now cover mutation and interior deletion in both implementations. Whole-store rollback remains explicitly excluded and requires external anchoring.",
+      "mechanism_digest": "fada64ae6bc70386bf44b69ddccc9e681a45d5877c07b7b748a7ea67d9fa4768"
     },
     {
       "claim_id": "RED-PATH-CONTAINMENT-001",
@@ -226,7 +231,7 @@
         "The test executes on every supported platform."
       ],
       "evidence": [
-        "red-team/tests/test_checks.py::test_source_link_escape_is_rejected"
+        "red-team/tests/test_checks.py::CheckTests::test_source_link_escape_is_rejected"
       ],
       "limitations": [
         "The Windows falsification uses an NTFS directory junction because it exercises the reparse-point escape without requiring symbolic-link privilege."
@@ -241,7 +246,8 @@
       "status": "EVIDENCED",
       "mechanism_changed_at": "2026-08-14-windows-junction-test",
       "version_bumped_at": "2026-08-14-windows-junction-test",
-      "status_note": "The falsification test passes on this Windows host without privilege-dependent skips; CI runs it on Windows and Linux with skips forbidden."
+      "status_note": "The falsification test passes on this Windows host without privilege-dependent skips; CI runs it on Windows and Linux with skips forbidden.",
+      "mechanism_digest": "86b61fef127919d7f5e24dfeea36b590bb640cc73c7146222e6eab26322533a3"
     },
     {
       "claim_id": "BLUE-NO-AUTONOMOUS-CONTAINMENT-001",
@@ -258,8 +264,8 @@
         "No downstream integration silently executes an emitted plan."
       ],
       "evidence": [
-        "blue-team/tests/test_health_coverage_response.py::test_response_is_non_executing_and_two_person_for_high_risk",
-        "blue-team/tests/test_health_coverage_response.py::test_unknown_response_action_fails_closed"
+        "blue-team/tests/test_health_coverage_response.py::OperationsTests::test_response_is_non_executing_and_two_person_for_high_risk",
+        "blue-team/tests/test_health_coverage_response.py::OperationsTests::test_unknown_response_action_fails_closed"
       ],
       "limitations": [
         "Constrains the platform, not the humans or the SOAR tooling that consumes its output."
@@ -270,7 +276,8 @@
       ],
       "owner": "Blue Lead",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "dcb2ffca92fd8400166205ff9eefb63151e6e48f713a3449553cee390f4b13ed"
     },
     {
       "claim_id": "BLUE-AUDIT-ANCHOR-001",
@@ -297,7 +304,8 @@
       ],
       "owner": "Blue Lead + White",
       "independent_reviewer": null,
-      "status": "MECHANISM_IDENTIFIED"
+      "status": "MECHANISM_IDENTIFIED",
+      "mechanism_digest": "b2f29f61bde73aa1e4a0851effa73c2081756b36b61a09f0b21fc883e668ef52"
     },
     {
       "claim_id": "PROGRAM-RED-INDEPENDENCE-001",
@@ -329,7 +337,8 @@
       "owner": "CISO",
       "independent_reviewer": null,
       "status": "MECHANISM_IDENTIFIED",
-      "status_note": "v1 of this claim was overbroad ('Red closes F-1') and was withdrawn 2026-08-14."
+      "status_note": "v1 of this claim was overbroad ('Red closes F-1') and was withdrawn 2026-08-14.",
+      "mechanism_digest": "b3c78f375fd64a9cfba03165cc980fdaac5c0ad7c92358585c6e86ca4985169b"
     },
     {
       "claim_id": "PROGRAM-READINESS-GATE-001",
@@ -347,7 +356,7 @@
       "evidence": [
         "00-shared/tools/claim_check.py --gates",
         ".github/workflows/assessment-issuance.yml",
-        "purple-team/tests/test_assurance_scoring.py::test_operational_claim_rejected_when_not_ready"
+        "purple-team/tests/test_assurance_scoring.py::AssuranceTests::test_operational_claim_rejected_when_not_ready"
       ],
       "limitations": [
         "Enforces marking and exit status; cannot prevent a human from copying a number into a slide."
@@ -359,7 +368,8 @@
       "owner": "Program owner",
       "independent_reviewer": null,
       "status": "EVIDENCED",
-      "status_note": "The dedicated assessment-issuance workflow now invokes --require-ready and fails while readiness is false. Branch protection remains an external deployment prerequisite."
+      "status_note": "The dedicated assessment-issuance workflow now invokes --require-ready and fails while readiness is false. Branch protection remains an external deployment prerequisite.",
+      "mechanism_digest": "f3e7e8b53eede23be1449addd24b44f0bfb12043eb41e70a3aebfffbc6ce36d8"
     },
     {
       "claim_id": "PURPLE-FROZEN-PLAN-001",
@@ -376,10 +386,10 @@
         "Whole-store rollback is handled by an external anchor."
       ],
       "evidence": [
-        "purple-team/tests/test_models.py::test_plan_digest_is_deterministic",
-        "purple-team/tests/test_models.py::test_unknown_plan_field_fails_closed",
-        "purple-team/tests/test_store.py::test_conflicting_plan_replay_is_rejected",
-        "purple-team/tests/test_store.py::test_plan_tampering_is_detected"
+        "purple-team/tests/test_models.py::ModelTests::test_plan_digest_is_deterministic",
+        "purple-team/tests/test_models.py::ModelTests::test_unknown_plan_field_fails_closed",
+        "purple-team/tests/test_store.py::StoreTests::test_conflicting_plan_replay_is_rejected",
+        "purple-team/tests/test_store.py::StoreTests::test_plan_tampering_is_detected"
       ],
       "limitations": [
         "Content identity is not proof that the approved procedure is safe or effective."
@@ -395,7 +405,8 @@
       "version_bumped_at": "2026-08-14-role-trust-pin",
       "owner": "Purple Lead",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "b20759c470a92aaed25408c8500852f6b269ccd87075fe75c88f428aaec29203"
     },
     {
       "claim_id": "PURPLE-SIGNED-TRANSITION-001",
@@ -414,11 +425,11 @@
         "System time is trustworthy."
       ],
       "evidence": [
-        "purple-team/tests/test_authority.py::test_valid_signed_transition_and_replay_rejection",
-        "purple-team/tests/test_authority.py::test_unpinned_role_registry_is_rejected",
-        "purple-team/tests/test_authority.py::test_tampered_transition_is_rejected",
-        "purple-team/tests/test_authority.py::test_role_key_mismatch_is_rejected",
-        "purple-team/tests/test_authority.py::test_long_lived_command_is_rejected"
+        "purple-team/tests/test_authority.py::AuthorityTests::test_valid_signed_transition_and_replay_rejection",
+        "purple-team/tests/test_authority.py::AuthorityTests::test_unpinned_role_registry_is_rejected",
+        "purple-team/tests/test_authority.py::AuthorityTests::test_tampered_transition_is_rejected",
+        "purple-team/tests/test_authority.py::AuthorityTests::test_role_key_mismatch_is_rejected",
+        "purple-team/tests/test_authority.py::AuthorityTests::test_long_lived_command_is_rejected"
       ],
       "limitations": [
         "Direct library callers must provide an equivalently authenticated boundary.",
@@ -436,7 +447,8 @@
       "version_bumped_at": "2026-08-14-role-trust-pin",
       "owner": "White + Purple Lead",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "000c9073e1b6ca28b5af58de038f1c8b4a4f38ab8496dec6cc96fa060562204a"
     },
     {
       "claim_id": "PURPLE-EVIDENCE-BINDING-001",
@@ -453,9 +465,9 @@
         "Producer identities are authenticated by the deployment boundary."
       ],
       "evidence": [
-        "purple-team/tests/test_store.py::test_evidence_outside_frozen_test_case_is_rejected",
-        "purple-team/tests/test_store.py::test_cross_test_case_evidence_is_rejected",
-        "purple-team/tests/test_store.py::test_evidence_verification_requires_all_six_stages"
+        "purple-team/tests/test_store.py::StoreTests::test_evidence_outside_frozen_test_case_is_rejected",
+        "purple-team/tests/test_store.py::StoreTests::test_cross_test_case_evidence_is_rejected",
+        "purple-team/tests/test_store.py::StoreTests::test_evidence_verification_requires_all_six_stages"
       ],
       "limitations": [
         "A digest proves byte identity, not truth, independence, or collection completeness."
@@ -468,7 +480,8 @@
       ],
       "owner": "Exercise Assurance",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "dea367d4c0064cadc57cd9ac8e5b8e719bb381b033d3041fa5a8257db28cde4b"
     },
     {
       "claim_id": "PURPLE-SCORE-FAILCLOSED-001",
@@ -485,9 +498,9 @@
         "Exercise Assurance validates evidence quality separately."
       ],
       "evidence": [
-        "purple-team/tests/test_assurance_scoring.py::test_auto_fail_zeroes_score_before_aggregation",
-        "purple-team/tests/test_assurance_scoring.py::test_missing_evidence_cannot_receive_score",
-        "purple-team/tests/test_assurance_scoring.py::test_boolean_score_is_rejected"
+        "purple-team/tests/test_assurance_scoring.py::AssuranceTests::test_auto_fail_zeroes_score_before_aggregation",
+        "purple-team/tests/test_assurance_scoring.py::AssuranceTests::test_missing_evidence_cannot_receive_score",
+        "purple-team/tests/test_assurance_scoring.py::AssuranceTests::test_boolean_score_is_rejected"
       ],
       "limitations": [
         "The scorer cannot prevent a human from copying a diagnostic value into an unauthorized presentation."
@@ -500,7 +513,8 @@
       ],
       "owner": "Exercise Assurance",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "ef91644e0d31579e2cad831000e2afa2fa15c7a569fc1eb9423df8357fa566df"
     },
     {
       "claim_id": "PURPLE-AUDIT-INTEGRITY-001",
@@ -517,12 +531,12 @@
         "SQLite durability settings are honored by the filesystem."
       ],
       "evidence": [
-        "purple-team/tests/test_store.py::test_transition_mutation_is_detected",
-        "purple-team/tests/test_store.py::test_interior_transition_deletion_is_detected",
-        "purple-team/tests/test_store.py::test_tail_deletion_is_detected",
-        "purple-team/tests/test_store.py::test_direct_state_tampering_is_detected",
-        "purple-team/tests/test_store.py::test_evidence_tampering_is_detected",
-        "purple-team/tests/test_store.py::test_stale_transition_is_rejected"
+        "purple-team/tests/test_store.py::StoreTests::test_transition_mutation_is_detected",
+        "purple-team/tests/test_store.py::StoreTests::test_interior_transition_deletion_is_detected",
+        "purple-team/tests/test_store.py::StoreTests::test_tail_deletion_is_detected",
+        "purple-team/tests/test_store.py::StoreTests::test_direct_state_tampering_is_detected",
+        "purple-team/tests/test_store.py::StoreTests::test_evidence_tampering_is_detected",
+        "purple-team/tests/test_store.py::StoreTests::test_stale_transition_is_rejected"
       ],
       "limitations": [
         "Whole-store rollback requires publication of export_anchor() to a separately administered append-only witness."
@@ -538,7 +552,8 @@
       "version_bumped_at": "2026-08-14-state-root",
       "owner": "Purple Lead + White",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "59b8621912698710960ad64a33fd165ba5e276f2e752997cd584722db0f1fa60"
     },
     {
       "claim_id": "EXERCISE-PREFLIGHT-REFUSAL-001",
@@ -556,14 +571,14 @@
         "Production trust-store enrollment and custody are truthful external inputs."
       ],
       "evidence": [
-        "exercise/tests/test_preflight.py::test_refuses_wrong_signing_key",
-        "exercise/tests/test_preflight.py::test_refuses_expired_authorization",
-        "exercise/tests/test_preflight.py::test_refuses_when_revoked",
-        "exercise/tests/test_preflight.py::test_refuses_each_safety_boundary_independently (11 BOUNDARY subtests)",
-        "exercise/tests/test_preflight.py::test_refuses_unknown_mode",
-        "exercise/tests/test_preflight.py::test_refuses_tampered_environment_attestation_signature",
-        "exercise/tests/test_rehearsal.py::test_formal_mode_runner_accepts_only_production_roles_when_gates_are_clear",
-        "exercise/tests/test_rehearsal.py::test_revocation_halts_running_exercise_at_next_safety_boundary"
+        "exercise/tests/test_preflight.py::PreflightTests::test_refuses_wrong_signing_key",
+        "exercise/tests/test_preflight.py::PreflightTests::test_refuses_expired_authorization",
+        "exercise/tests/test_preflight.py::PreflightTests::test_refuses_when_revoked",
+        "exercise/tests/test_preflight.py::PreflightTests::test_refuses_each_safety_boundary_independently (11 BOUNDARY subtests)",
+        "exercise/tests/test_preflight.py::PreflightTests::test_refuses_unknown_mode",
+        "exercise/tests/test_preflight.py::PreflightTests::test_refuses_tampered_environment_attestation_signature",
+        "exercise/tests/test_rehearsal.py::RehearsalTests::test_formal_mode_runner_accepts_only_production_roles_when_gates_are_clear",
+        "exercise/tests/test_rehearsal.py::RehearsalTests::test_revocation_halts_running_exercise_at_next_safety_boundary"
       ],
       "limitations": [
         "The formal path is engineering-tested with ephemeral production-role keys; no real production authority is enrolled."
@@ -577,7 +592,8 @@
       "independent_reviewer": null,
       "status": "EVIDENCED",
       "mechanism_changed_at": "2026-08-14-signed-attestation-formal-runner-revocation",
-      "version_bumped_at": "2026-08-14-signed-attestation-formal-runner-revocation"
+      "version_bumped_at": "2026-08-14-signed-attestation-formal-runner-revocation",
+      "mechanism_digest": "7b59902b6d97a4a6cc0a04bd450a69f00f0cc044b4200c18213e9f48c3dc44f5"
     },
     {
       "claim_id": "EXERCISE-CLEARANCE-BINDING-001",
@@ -595,15 +611,15 @@
         "Trust-store records establish signer identity; a valid signature from an unknown key is unauthorized."
       ],
       "evidence": [
-        "exercise/tests/test_clearance.py::test_direct_runner_invocation_is_refused",
-        "exercise/tests/test_clearance.py::test_refuses_nonce_replay",
-        "exercise/tests/test_clearance.py::test_refuses_manifest_change_after_clearance",
-        "exercise/tests/test_clearance.py::test_refuses_tampered_signature",
-        "exercise/tests/test_clearance.py::test_refuses_unknown_key_even_with_valid_signature",
-        "exercise/tests/test_clearance.py::test_refuses_boundary_config_change",
-        "exercise/tests/test_clearance.py::test_formal_mode_refuses_fixture_trust_store",
-        "exercise/tests/test_clearance.py::test_refuses_signer_with_wrong_role",
-        "exercise/tests/test_rehearsal.py::test_formal_mode_runner_accepts_only_production_roles_when_gates_are_clear"
+        "exercise/tests/test_clearance.py::ClearanceTests::test_direct_runner_invocation_is_refused",
+        "exercise/tests/test_clearance.py::ClearanceTests::test_refuses_nonce_replay",
+        "exercise/tests/test_clearance.py::ClearanceTests::test_refuses_manifest_change_after_clearance",
+        "exercise/tests/test_clearance.py::ClearanceTests::test_refuses_tampered_signature",
+        "exercise/tests/test_clearance.py::ClearanceTests::test_refuses_unknown_key_even_with_valid_signature",
+        "exercise/tests/test_clearance.py::ClearanceTests::test_refuses_boundary_config_change",
+        "exercise/tests/test_clearance.py::ClearanceTests::test_formal_mode_refuses_fixture_trust_store",
+        "exercise/tests/test_clearance.py::ClearanceTests::test_refuses_signer_with_wrong_role",
+        "exercise/tests/test_rehearsal.py::RehearsalTests::test_formal_mode_runner_accepts_only_production_roles_when_gates_are_clear"
       ],
       "limitations": [
         "Defends against accidental bypass, replay, and modified inputs. Does NOT defend against host-level access to the clearance signing key.",
@@ -620,7 +636,8 @@
       "independent_reviewer": null,
       "status": "EVIDENCED",
       "mechanism_changed_at": "2026-08-14-production-role-path",
-      "version_bumped_at": "2026-08-14-production-role-path"
+      "version_bumped_at": "2026-08-14-production-role-path",
+      "mechanism_digest": "7cc436910e27429afe829b0d9e043fe380db35cfca7134c7ac2697fa28c7b157"
     },
     {
       "claim_id": "EXERCISE-EXECUTION-RECEIPT-001",
@@ -636,7 +653,7 @@
         "The enrolled Red execution key remains distinct from authorization keys."
       ],
       "evidence": [
-        "exercise/tests/test_assurance_objects.py::test_red_execution_receipt_is_separate_and_bound_to_authorization",
+        "exercise/tests/test_assurance_objects.py::AssuranceObjectTests::test_red_execution_receipt_is_separate_and_bound_to_authorization",
         "TEST-EXECUTION-RECEIPT-TAMPER-REJECTED"
       ],
       "limitations": [
@@ -649,7 +666,8 @@
       ],
       "owner": "Red Lead + White",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "bab951da9ca1da76348a3bf773bcfd034f196415e35afc73603182a9d59c6e9a"
     },
     {
       "claim_id": "EXERCISE-ASSESSMENT-SIGNATURE-001",
@@ -665,8 +683,8 @@
         "Exercise Assurance key custody and independence hold externally."
       ],
       "evidence": [
-        "exercise/tests/test_assurance_objects.py::test_exercise_assurance_signs_complete_assessment",
-        "exercise/tests/test_assurance_objects.py::test_red_key_cannot_sign_assessment",
+        "exercise/tests/test_assurance_objects.py::AssuranceObjectTests::test_exercise_assurance_signs_complete_assessment",
+        "exercise/tests/test_assurance_objects.py::AssuranceObjectTests::test_red_key_cannot_sign_assessment",
         "TEST-RED-ASSESSMENT-ROLE-REJECTED"
       ],
       "limitations": [
@@ -679,7 +697,8 @@
       ],
       "owner": "Exercise Assurance",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "2f884dc7784d87e9bf33248c516257a49e31cd216bbd9026bcf0b56ac74981a6"
     },
     {
       "claim_id": "EXERCISE-REVOCATION-BOUNDARY-001",
@@ -695,7 +714,7 @@
         "The revocation feed is available and integrity-protected."
       ],
       "evidence": [
-        "exercise/tests/test_rehearsal.py::test_revocation_halts_running_exercise_at_next_safety_boundary",
+        "exercise/tests/test_rehearsal.py::RehearsalTests::test_revocation_halts_running_exercise_at_next_safety_boundary",
         "TEST-MIDRUN-REVOCATION-REJECTED-EXECUTION"
       ],
       "limitations": [
@@ -708,7 +727,8 @@
       ],
       "owner": "Executive authority + White",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "cba3d7baf964920cd24a1930c6cf077a18614be881c5db075a65f88876e604b5"
     },
     {
       "claim_id": "EXERCISE-KEY-LIFECYCLE-001",
@@ -724,7 +744,7 @@
         "Submitted fingerprints were captured from the actual custody system."
       ],
       "evidence": [
-        "exercise/tests/test_assurance_objects.py::test_rotation_and_holder_unavailable_recovery_for_all_five_keys",
+        "exercise/tests/test_assurance_objects.py::AssuranceObjectTests::test_rotation_and_holder_unavailable_recovery_for_all_five_keys",
         "TEST-KEY-RECOVERY-MISMATCH-REJECTED"
       ],
       "limitations": [
@@ -737,7 +757,8 @@
       ],
       "owner": "White + CISO",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "1555398e8cb360d7f6e1ffb463345691919f46c67dcb371df14962f0143e5c1e"
     },
     {
       "claim_id": "RED-REPOSITORY-POSTURE-001",
@@ -754,10 +775,10 @@
         "Repository manifests use supported formats."
       ],
       "evidence": [
-        "red-team/tests/test_repository_posture.py::test_detects_unpinned_dependency_and_write_all_workflow",
-        "red-team/tests/test_repository_posture.py::test_exact_dependency_and_read_only_workflow_are_clean",
-        "red-team/tests/test_repository_posture.py::test_link_escape_is_rejected",
-        "red-team/tests/test_repository_posture.py::test_finding_budget_truncates"
+        "red-team/tests/test_repository_posture.py::RepositoryPostureTests::test_detects_unpinned_dependency_and_write_all_workflow",
+        "red-team/tests/test_repository_posture.py::RepositoryPostureTests::test_exact_dependency_and_read_only_workflow_are_clean",
+        "red-team/tests/test_repository_posture.py::RepositoryPostureTests::test_link_escape_is_rejected",
+        "red-team/tests/test_repository_posture.py::RepositoryPostureTests::test_finding_budget_truncates"
       ],
       "limitations": [
         "This check does not replace SCA, provenance verification, or workflow semantic review."
@@ -769,7 +790,8 @@
       ],
       "owner": "Red Lead",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "b16d7901f5e3071c3bc862f33272fd538e80a1d3e015f5ffd2964bc989ef7367"
     },
     {
       "claim_id": "PROGRAM-CI-SEPARATION-001",
@@ -787,9 +809,9 @@
         "Workflow files are the authoritative CI definition."
       ],
       "evidence": [
-        "00-shared/tools/test_ci_integrity.py::test_issuance_workflow_never_permits_a_readiness_hold",
-        "00-shared/tools/test_ci_integrity.py::test_no_third_workflow_silently_issues_assurance",
-        "00-shared/tools/test_ci_integrity.py::test_engineering_workflow_does_not_claim_readiness",
+        "00-shared/tools/test_ci_integrity.py::CiSeparationTests::test_issuance_workflow_never_permits_a_readiness_hold",
+        "00-shared/tools/test_ci_integrity.py::CiSeparationTests::test_no_third_workflow_silently_issues_assurance",
+        "00-shared/tools/test_ci_integrity.py::CiSeparationTests::test_engineering_workflow_does_not_claim_readiness",
         "falsification: injecting --allow-not-ready into assessment-issuance.yml FAILS 2 tests (verified 2026-08-14)",
         "00-shared/tools/run_ci.py (local execution, 9/9 gates)"
       ],
@@ -805,7 +827,8 @@
       ],
       "owner": "Program owner",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "3abcc51f546bec30b407dbf5005b55aecd2f4fe366ba388fd7c9bdc5ff687100"
     },
     {
       "claim_id": "PROGRAM-REPO-HYGIENE-001",
@@ -822,11 +845,11 @@
         "Contributors commit from within this repository rather than copying files elsewhere."
       ],
       "evidence": [
-        "00-shared/tools/test_repo_hygiene.py::test_detector_rejects_secret_shaped_paths (FALSIFICATION: 5 poisoned paths must be caught)",
-        "00-shared/tools/test_repo_hygiene.py::test_detector_does_not_flag_ordinary_files (NEGATIVE: no false positives)",
-        "00-shared/tools/test_repo_hygiene.py::test_fixture_private_keys_exist_but_are_ignored",
-        "00-shared/tools/test_repo_hygiene.py::test_no_secret_material_is_tracked",
-        "00-shared/tools/test_repo_hygiene.py::test_gitignore_exists_and_covers_secrets"
+        "00-shared/tools/test_repo_hygiene.py::RepoHygieneTests::test_detector_rejects_secret_shaped_paths (FALSIFICATION: 5 poisoned paths must be caught)",
+        "00-shared/tools/test_repo_hygiene.py::RepoHygieneTests::test_detector_does_not_flag_ordinary_files (NEGATIVE: no false positives)",
+        "00-shared/tools/test_repo_hygiene.py::RepoHygieneTests::test_fixture_private_keys_exist_but_are_ignored",
+        "00-shared/tools/test_repo_hygiene.py::RepoHygieneTests::test_no_secret_material_is_tracked",
+        "00-shared/tools/test_repo_hygiene.py::RepoHygieneTests::test_gitignore_exists_and_covers_secrets"
       ],
       "limitations": [
         "Guards this repository only. A file copied into another repo is not covered.",
@@ -839,7 +862,8 @@
       ],
       "owner": "Program owner",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "d28a8aeae777d0c450aacbfef14a9618084f254ccc7b2411e946ce6d48f98553"
     },
     {
       "claim_id": "PROGRAM-CI-REACHABLE-001",
@@ -856,8 +880,8 @@
         "The repository is eventually pushed to a host that executes Actions. Until then only the local runner provides enforcement."
       ],
       "evidence": [
-        "00-shared/tools/test_repo_hygiene.py::test_program_workflows_are_reachable_by_ci",
-        "00-shared/tools/test_repo_hygiene.py::test_root_workflow_actually_invokes_the_program_gates",
+        "00-shared/tools/test_repo_hygiene.py::CiReachabilityTests::test_program_workflows_are_reachable_by_ci",
+        "00-shared/tools/test_repo_hygiene.py::CiReachabilityTests::test_root_workflow_actually_invokes_the_program_gates",
         "local run 2026-08-14: 9/9 engineering gates PASS; --assurance FAILS closed (exit 1)",
         "GitHub Actions run 31817937014 SUCCESS on ubuntu-latest AND windows-latest (2026-08-14) - the workflow has now actually executed"
       ],
@@ -873,7 +897,8 @@
       ],
       "owner": "Program owner",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "467ce447f54fc7438375e06aa35e11bf0a98d1980f0cfc2dbef3188cd01bc2fb"
     },
     {
       "claim_id": "PROGRAM-GATE-MANIFEST-001",
@@ -890,10 +915,10 @@
         "Contributors add gates to the manifest rather than only to one runner."
       ],
       "evidence": [
-        "00-shared/tools/test_gate_manifest.py::test_workflow_covers_every_engineering_gate (NEGATIVE)",
-        "00-shared/tools/test_gate_manifest.py::test_workflow_pins_actions_to_sha (NEGATIVE)",
-        "00-shared/tools/test_gate_manifest.py::test_workflow_installs_hash_pinned_requirements (NEGATIVE)",
-        "00-shared/tools/test_gate_manifest.py::test_assurance_gate_is_not_in_the_engineering_list (NEGATIVE)"
+        "00-shared/tools/test_gate_manifest.py::GateManifestTests::test_workflow_covers_every_engineering_gate (NEGATIVE)",
+        "00-shared/tools/test_gate_manifest.py::GateManifestTests::test_workflow_pins_actions_to_sha (NEGATIVE)",
+        "00-shared/tools/test_gate_manifest.py::GateManifestTests::test_workflow_installs_hash_pinned_requirements (NEGATIVE)",
+        "00-shared/tools/test_gate_manifest.py::GateManifestTests::test_assurance_gate_is_not_in_the_engineering_list (NEGATIVE)"
       ],
       "limitations": [
         "Guards the workflow file, not the runner host.",
@@ -906,7 +931,8 @@
       ],
       "owner": "Program owner",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "21959ba52de046550c63e0e15e78155bab20d3f05e5e83b7470fa775cf25641f"
     },
     {
       "claim_id": "EXERCISE-NONCE-LEDGER-001",
@@ -923,10 +949,10 @@
         "Host clock is not adjusted backwards by more than the retention margin."
       ],
       "evidence": [
-        "exercise/tests/test_clearance.py::test_expired_nonces_are_pruned",
-        "exercise/tests/test_clearance.py::test_unparsable_entries_are_retained_never_discarded (NEGATIVE)",
-        "exercise/tests/test_clearance.py::test_corrupt_ledger_fails_closed (NEGATIVE)",
-        "exercise/tests/test_clearance.py::test_replay_still_refused_within_retention (NEGATIVE)"
+        "exercise/tests/test_clearance.py::NonceLedgerTests::test_expired_nonces_are_pruned",
+        "exercise/tests/test_clearance.py::NonceLedgerTests::test_unparsable_entries_are_retained_never_discarded (NEGATIVE)",
+        "exercise/tests/test_clearance.py::NonceLedgerTests::test_corrupt_ledger_fails_closed (NEGATIVE)",
+        "exercise/tests/test_clearance.py::NonceLedgerTests::test_replay_still_refused_within_retention (NEGATIVE)"
       ],
       "limitations": [
         "The ledger is machine-local and gitignored: replay protection is PER HOST. A clearance replayed on a different host is not blocked. Cross-host protection needs a shared ledger and is a deployment decision.",
@@ -939,7 +965,8 @@
       ],
       "owner": "Red Lead + White",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "7de6dcea7f0f80dca2eeee46ba72c179a51cc389692b10804ef1cb4be65a7154"
     },
     {
       "claim_id": "PROGRAM-CROSSPLATFORM-DETERMINISM-001",
@@ -974,7 +1001,8 @@
       ],
       "owner": "Program owner",
       "independent_reviewer": null,
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "35d3633f446db875c640337501c4d2214eeb8ff6ff4d611e0509523f0909c968"
     },
     {
       "claim_id": "PURPLE-READINESS-DERIVED-001",
@@ -992,13 +1020,13 @@
         "An attacker with write access to the repository's own registry is out of scope for this control - that edit is visible in git."
       ],
       "evidence": [
-        "purple-team/tests/test_readiness_derivation.py::test_pending_gates_force_training_marking (NEGATIVE)",
-        "purple-team/tests/test_readiness_derivation.py::test_one_pending_gate_is_enough_to_hold (NEGATIVE)",
-        "purple-team/tests/test_readiness_derivation.py::test_all_verified_permits_candidate (POSITIVE - derivation works both ways)",
-        "purple-team/tests/test_readiness_derivation.py::test_score_accepts_no_caller_supplied_readiness (NEGATIVE)",
-        "purple-team/tests/test_readiness_derivation.py::test_cli_rejects_the_old_bypass_flag (NEGATIVE)",
-        "purple-team/tests/test_readiness_derivation.py::test_malformed_registry_fails_closed (NEGATIVE)",
-        "purple-team/tests/test_readiness_derivation.py::test_unknown_status_is_not_verified (NEGATIVE)",
+        "purple-team/tests/test_readiness_derivation.py::ReadinessDerivationTests::test_pending_gates_force_training_marking (NEGATIVE)",
+        "purple-team/tests/test_readiness_derivation.py::ReadinessDerivationTests::test_one_pending_gate_is_enough_to_hold (NEGATIVE)",
+        "purple-team/tests/test_readiness_derivation.py::ReadinessDerivationTests::test_all_verified_permits_candidate (POSITIVE - derivation works both ways)",
+        "purple-team/tests/test_readiness_derivation.py::ReadinessDerivationTests::test_score_accepts_no_caller_supplied_readiness (NEGATIVE)",
+        "purple-team/tests/test_readiness_derivation.py::ReadinessDerivationTests::test_cli_rejects_the_old_bypass_flag (NEGATIVE)",
+        "purple-team/tests/test_readiness_derivation.py::ReadinessDerivationTests::test_malformed_registry_fails_closed (NEGATIVE)",
+        "purple-team/tests/test_readiness_derivation.py::ReadinessDerivationTests::test_unknown_status_is_not_verified (NEGATIVE)",
         "purple-team/tests/test_readiness_derivation.py::ForgedRegistryTests::test_forged_registry_is_refused (NEGATIVE - the attack that defeated v1)"
       ],
       "limitations": [
@@ -1012,7 +1040,8 @@
       ],
       "owner": "Purple Lead",
       "independent_reviewer": "external adversarial review 2026-08-14 (AUD-01)",
-      "status": "EVIDENCED"
+      "status": "EVIDENCED",
+      "mechanism_digest": "e928c1b60e1861b82a72846576197ef95fc328fca1d4acf8a2964ed395b2637e"
     },
     {
       "claim_id": "EXERCISE-CLEARANCE-REPLAY-002",
@@ -1048,11 +1077,12 @@
       "owner": "Purple Team",
       "independent_reviewer": null,
       "status": "EVIDENCED",
-      "status_note": "Reported as a Medium error-handling defect; measurement showed replay protection did not hold at all under concurrency (3 of 6 processes succeeded on the same nonce, 12/12 rounds). Fix is falsification-verified: removing the lock restores the failure."
+      "status_note": "Reported as a Medium error-handling defect; measurement showed replay protection did not hold at all under concurrency (3 of 6 processes succeeded on the same nonce, 12/12 rounds). Fix is falsification-verified: removing the lock restores the failure.",
+      "mechanism_digest": "2a64bfbe5acfa6f443c0790753f79136b8a20d8a779ed9052190865a596fb6c0"
     },
     {
       "claim_id": "AEGIS-RT-SCAN-SCOPE-001",
-      "version": 3,
+      "version": 4,
       "claim": "Offline source and repository-posture scans never read content from outside the authorized root, including when a local attacker swaps a path between validation and read.",
       "scope": {
         "artifact": "aegis_rt/checks/safe_scan.py",
@@ -1064,7 +1094,7 @@
       "mechanism": {
         "construction": "no-follow bounded traversal + descriptor identity binding: os.walk(followlinks=False) with realpath containment per component, then open(O_NOFOLLOW) with fstat(descriptor) compared against the traversal-time lstat on (st_dev, st_ino, st_mode), plus a post-open re-lstat of the path compared to the descriptor",
         "traversal": "os.walk(followlinks=False) with realpath containment on every component, covering symlinks, junctions and mounts; bounded by an explicit entry limit that raises rather than truncating.",
-        "read": "Opened once with O_NOFOLLOW where available. Identity is compared on STABLE fields only. The open pins the inode, so a post-open re-lstat of the path confirms the path still refers to the file being read. Content is read from that descriptor, so no second path lookup exists to race."
+        "read": "Opened once with O_NOFOLLOW where available. Identity is compared on STABLE fields only. The open pins the inode, so a post-open re-lstat of the path confirms the path still refers to the file being read. Content is read from that descriptor, so no second path lookup exists to race. Files whose inode has more than one name (st_nlink > 1) are refused outright: a hardlink is an equal name for an inode, not a reference to another path, so containment cannot be decided for it."
       },
       "assumptions": [
         "The filesystem reports stable (st_dev, st_ino) for a file while a descriptor to it is open.",
@@ -1072,6 +1102,8 @@
         "The scanner process is not itself compromised."
       ],
       "evidence": [
+        "red-team/tests/test_scan_race.py::PreExistingHardlinkTests::test_preexisting_hardlink_to_out_of_scope_file_is_not_read (NEGATIVE - external finding SONNET-01, reproduced before acceptance)",
+        "red-team/tests/test_scan_race.py::PreExistingHardlinkTests::test_ordinary_single_linked_file_is_still_read (POSITIVE - the refusal must not become a blanket skip)",
         "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_hardlink_to_out_of_scope_file_is_refused (NEGATIVE - the case O_NOFOLLOW does not cover)",
         "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_symlink_swapped_in_is_refused (NEGATIVE)",
         "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_in_scope_replacement_is_permitted (POSITIVE - pins the boundary; guards against reintroducing the flaky over-strict rule)",
@@ -1083,6 +1115,8 @@
       ],
       "evidence_location": "red-team/tests/test_scan_race.py",
       "limitations": [
+        "Multiply-linked files (st_nlink > 1) are REFUSED, not read. There is no portable way to enumerate an inode's other names and no canonical name among hardlinks, so containment cannot be decided. This is a disclosed refusal, not a silent skip; on trees that legitimately use hardlinks it reduces coverage.",
+        "Found by external review (SONNET-01): before v4 a PRE-EXISTING in-root hardlink to an out-of-scope file WAS read. realpath resolves a hardlink to its own in-root path, so traversal validated it and the identity check compared the file to itself. The prior docstring claim that hardlinks were covered was true only for a link swapped in AFTER traversal.",
         "Replacing a file at the same path INSIDE the authorized root is permitted, not refused. Such a file is still in scope, so reading it is authorized; this control governs scope, not content freshness.",
         "st_ctime_ns was trialled to detect same-path replacement and REMOVED: it mismatched in ~10% of runs on Windows between a path lstat and a handle fstat of the same untouched file, which would have made the scanner silently skip files.",
         "The containment decision is time-of-check; the identity binding is what makes it hold at time-of-use. A root directory replaced before traversal begins is out of scope for this control.",
@@ -1096,7 +1130,8 @@
       "owner": "Red Team",
       "independent_reviewer": null,
       "status": "EVIDENCED",
-      "status_note": "Closes the external assessment's residual High. Two earlier versions were wrong and both were caught by evidence rather than review: v1 bound identity to (dev, ino) only and was defeated by Linux inode reuse in CI; v2 added ctime_ns, which was measurably unstable on Windows and would have caused silent under-reporting. v2 also revealed that the TEST over-stated the property - an in-scope replacement is not a scope violation. v3 states the property precisely and uses stable fields."
+      "status_note": "Closes the external assessment's residual High. Two earlier versions were wrong and both were caught by evidence rather than review: v1 bound identity to (dev, ino) only and was defeated by Linux inode reuse in CI; v2 added ctime_ns, which was measurably unstable on Windows and would have caused silent under-reporting. v2 also revealed that the TEST over-stated the property - an in-scope replacement is not a scope violation. v3 states the property precisely and uses stable fields. v4 closes SONNET-01, an external finding this repo's own tests did not catch because every hardlink test created the link AFTER capturing the expected stat.",
+      "mechanism_digest": "4c0a9e13566fd137b5a738e08e5dd61b47925f2c713c13defa647a7c68b8143b"
     }
   ]
 }
