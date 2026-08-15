@@ -76,10 +76,35 @@ def rel(p):
 
 
 def check_gates(gates):
+    """Readiness derived from EVERY defined gate, not from an author-editable list.
+
+    OPUS-F6, reproduced: this iterated `assessment_readiness.required_gates`. Deleting
+    the two PENDING entries from that list - WITHOUT touching their status, which still
+    read PENDING in `gate_definitions` - flipped the program from NOT_ASSESSMENT_READY
+    (exit 2) to ASSESSMENT_READY (exit 0) with `allow_assurance_statement` true, and
+    made R6 unreachable. That is the exact negation of PROGRAM-READINESS-GATE-001.
+
+    Third instance of one pattern: R5 trusted `evidence_gap`, R7 trusted
+    `mechanism_changed_at`, readiness trusted `required_gates`. Each consulted a field
+    the author writes while the ground truth sat unread beside it. Ground truth here is
+    `gate_definitions`; `required_gates` is now an ASSERTION about it, validated rather
+    than obeyed.
+    """
     ar = gates["assessment_readiness"]
     defs = gates["gate_definitions"]
-    failed = [g for g in ar["required_gates"] if defs[g]["status"] != "VERIFIED"]
-    return failed, ar
+    failed = [name for name, d in defs.items() if d.get("status") != "VERIFIED"]
+
+    # `required_gates` may not silently narrow the gate set. Omitting a defined gate is
+    # itself a readiness failure, so shrinking the list can never buy readiness.
+    declared = set(ar.get("required_gates") or [])
+    omitted = sorted(set(defs) - declared)
+    for name in omitted:
+        if name not in failed:
+            failed.append(name)
+    if omitted:
+        ar = dict(ar)
+        ar["required_gates_omissions"] = omitted
+    return sorted(failed), ar
 
 
 def check_claims(reg, gates_failed):
@@ -186,7 +211,7 @@ def collect_node_ids():
     import subprocess
 
     gates = load(os.path.join(ROOT, "00-shared", "config", "ci_gates.json"))
-    found, unresolvable = set(), []
+    found, unresolvable, skipped = set(), [], set()
     for gate in gates["engineering_gates"]:
         if gate.get("kind") != "unittest":
             continue
@@ -205,24 +230,33 @@ def collect_node_ids():
                 # The collector then silently saw zero blue-team tests and would have
                 # reported every blue claim as unresolved evidence - a false positive
                 # in the very gate meant to stop false confidence.
-                [sys.executable, "-m", "pytest", target, "--collect-only", "-q",
-                 "--no-header", "-p", "no:cacheprovider", "-o", "addopts="],
+                # -v (not --collect-only) so we learn the OUTCOME, not just existence.
+                # Collection alone includes SKIPPED tests, so proving a node id exists
+                # never proved it ran - the residual of opus F1 that I disclosed.
+                [sys.executable, "-m", "pytest", target, "-v", "--no-header",
+                 "--tb=no", "-p", "no:cacheprovider", "-o", "addopts="],
                 cwd=cwd, env=env, capture_output=True, text=True, timeout=300)
         except (OSError, subprocess.SubprocessError) as exc:
             unresolvable.append(f"{test_path}: {type(exc).__name__}")
             continue
-        if proc.returncode not in (0, 5):        # 5 = no tests collected
+        if proc.returncode not in (0, 5):        # 5 = no tests ran
             unresolvable.append(f"{test_path}: pytest exit {proc.returncode}")
             continue
         for line in proc.stdout.splitlines():
             line = line.strip()
             if "::" not in line or line.startswith(("=", "<", "ERROR", "FAILED")):
                 continue
-            found.add(f"{package}/{line}".replace("\\", "/") if package else line)
-    return found, unresolvable
+            node = line.split()[0]
+            if "::" not in node:
+                continue
+            full = f"{package}/{node}".replace("\\", "/") if package else node
+            found.add(full)
+            if " SKIPPED" in line or line.endswith("SKIPPED"):
+                skipped.add(full)
+    return found, unresolvable, skipped
 
 
-def check_evidence(reg, node_ids, unresolvable):
+def check_evidence(reg, node_ids, unresolvable, skipped=frozenset()):
     """R5, honestly: does the cited evidence resolve to a test that exists?
 
     The spec promises detection of 'skipped or stale' tests. The implementation read
@@ -243,10 +277,21 @@ def check_evidence(reg, node_ids, unresolvable):
             ref = item.split(" (")[0].strip()
             if "::" not in ref:
                 continue                          # prose/doc evidence handled by R4
-            if ref.replace("\\", "/") not in node_ids:
+            normalised = ref.replace("\\", "/")
+            if normalised not in node_ids:
                 violations.append(
                     ("R5", c["claim_id"],
                      f"evidence does not resolve to any collected test: {ref[:70]}"))
+            elif normalised in skipped:
+                # SELF-DISCLOSED residual of opus F1, now closed. Collection includes
+                # SKIPPED tests, so proving a node ID exists did not prove it ever ran.
+                # A claim resting on a test that never executes on this platform is
+                # resting on nothing - and AEGIS-RT-SCAN-SCOPE-001 was doing exactly
+                # that on Windows.
+                violations.append(
+                    ("R5", c["claim_id"],
+                     f"evidence test is SKIPPED on this platform, so it evidences "
+                     f"nothing here: {ref[:60]}"))
     return violations
 
 
@@ -283,8 +328,8 @@ def main():
     if allc:
         viol = check_claims(reg, failed)
         # F1/F2 (opus): resolve cited evidence instead of trusting the string.
-        node_ids, unresolvable = collect_node_ids()
-        viol += check_evidence(reg, node_ids, unresolvable)
+        node_ids, unresolvable, skipped = collect_node_ids()
+        viol += check_evidence(reg, node_ids, unresolvable, skipped)
         by = {}
         for r, cid, msg in viol:
             by.setdefault(cid, []).append((r, msg))

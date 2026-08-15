@@ -117,3 +117,50 @@ class GateManifestTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class ReadinessDerivationTests(unittest.TestCase):
+    """OPUS-F6: readiness must derive from gate_definitions, not required_gates.
+
+    Reproduced before the fix: deleting the two PENDING entries from `required_gates`
+    - WITHOUT changing their status, which still read PENDING - flipped the program
+    from NOT_ASSESSMENT_READY to ASSESSMENT_READY with allow_assurance_statement true,
+    and made R6 unreachable. The exact negation of PROGRAM-READINESS-GATE-001.
+    """
+
+    def _gates(self):
+        import copy
+        import json as _json
+        import os as _os
+        import sys as _sys
+        _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
+        import claim_check as cc
+        with open(cc.GATES, encoding="utf-8") as handle:
+            return cc, copy.deepcopy(_json.load(handle))
+
+    def test_dropping_a_pending_gate_from_required_gates_cannot_buy_readiness(self):
+        cc, gates = self._gates()
+        pending = [n for n, d in gates["gate_definitions"].items()
+                   if d.get("status") != "VERIFIED"]
+        self.assertTrue(pending, "fixture must have at least one pending gate")
+        gates["assessment_readiness"]["required_gates"] = [
+            n for n, d in gates["gate_definitions"].items() if d.get("status") == "VERIFIED"]
+        failed, _ = cc.check_gates(gates)
+        for name in pending:
+            self.assertIn(name, failed,
+                          "a PENDING gate omitted from required_gates must still fail")
+
+    def test_emptying_required_gates_cannot_buy_readiness(self):
+        cc, gates = self._gates()
+        gates["assessment_readiness"]["required_gates"] = []
+        failed, _ = cc.check_gates(gates)
+        self.assertEqual(sorted(failed), sorted(gates["gate_definitions"]),
+                         "an empty required_gates list must fail every defined gate")
+
+    def test_all_verified_still_reaches_readiness(self):
+        """The fix must not make readiness unreachable."""
+        cc, gates = self._gates()
+        for d in gates["gate_definitions"].values():
+            d["status"] = "VERIFIED"
+        failed, _ = cc.check_gates(gates)
+        self.assertEqual(failed, [], "genuinely verified gates must still pass")

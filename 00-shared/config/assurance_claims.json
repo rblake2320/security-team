@@ -1082,7 +1082,7 @@
     },
     {
       "claim_id": "AEGIS-RT-SCAN-SCOPE-001",
-      "version": 4,
+      "version": 5,
       "claim": "Offline source and repository-posture scans never read content from outside the authorized root, including when a local attacker swaps a path between validation and read.",
       "scope": {
         "artifact": "aegis_rt/checks/safe_scan.py",
@@ -1105,7 +1105,6 @@
         "red-team/tests/test_scan_race.py::PreExistingHardlinkTests::test_preexisting_hardlink_to_out_of_scope_file_is_not_read (NEGATIVE - external finding SONNET-01, reproduced before acceptance)",
         "red-team/tests/test_scan_race.py::PreExistingHardlinkTests::test_ordinary_single_linked_file_is_still_read (POSITIVE - the refusal must not become a blanket skip)",
         "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_hardlink_to_out_of_scope_file_is_refused (NEGATIVE - the case O_NOFOLLOW does not cover)",
-        "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_symlink_swapped_in_is_refused (NEGATIVE)",
         "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_in_scope_replacement_is_permitted (POSITIVE - pins the boundary; guards against reintroducing the flaky over-strict rule)",
         "red-team/tests/test_scan_race.py::ReadVerifiedTests::test_unchanged_file_is_still_read (POSITIVE - guards against over-refusal)",
         "red-team/tests/test_scan_race.py::TraversalTests::test_directory_link_out_of_scope_is_not_traversed (NEGATIVE)",
@@ -1115,6 +1114,7 @@
       ],
       "evidence_location": "red-team/tests/test_scan_race.py",
       "limitations": [
+        "Symlink refusal (O_NOFOLLOW) is evidenced ONLY in Linux CI: the test skips on Windows hosts lacking SeCreateSymbolicLink. It is deliberately NOT cited as evidence here, because a test that does not execute on a platform evidences nothing on that platform - the gate now enforces this. Hardlink and race-injection evidence runs everywhere.",
         "Multiply-linked files (st_nlink > 1) are REFUSED, not read. There is no portable way to enumerate an inode's other names and no canonical name among hardlinks, so containment cannot be decided. This is a disclosed refusal, not a silent skip; on trees that legitimately use hardlinks it reduces coverage.",
         "Found by external review (SONNET-01): before v4 a PRE-EXISTING in-root hardlink to an out-of-scope file WAS read. realpath resolves a hardlink to its own in-root path, so traversal validated it and the identity check compared the file to itself. The prior docstring claim that hardlinks were covered was true only for a link swapped in AFTER traversal.",
         "Replacing a file at the same path INSIDE the authorized root is permitted, not refused. Such a file is still in scope, so reading it is authorized; this control governs scope, not content freshness.",
