@@ -76,7 +76,22 @@ def score_assessment(
 
 
 def _readiness_state(readiness: dict[str, Any]) -> tuple[bool, list[str]]:
-    """Return (ready, pending_gates) from the authoritative registry. Fails closed."""
+    """Return (ready, pending_gates) derived from EVERY defined gate. Fails closed.
+
+    L3-F1 (external review, reproduced): this iterated `required_gates`, an
+    author-editable list, instead of `gate_definitions`, the record ground truth sits
+    in. PoC: drop the two PENDING gates from `required_gates` without touching their
+    status - `gate_definitions` still reads PENDING for both - and this returned
+    ready=True. That is the exact falsification of PROGRAM-READINESS-GATE-001 that
+    AUD-01/AUD-01b/claim_check-F6 each closed in a different module. This is the
+    fourth independent instance of the same pattern (trusting a self-declared summary
+    field instead of the record it summarises), surviving here specifically because
+    this file had no owner when the earlier fixes landed.
+
+    `required_gates` is now an ASSERTION about `gate_definitions`, validated rather
+    than obeyed: omitting a defined gate from it is itself a readiness failure, so
+    shrinking the list can never buy readiness.
+    """
     block = readiness.get("assessment_readiness")
     definitions = readiness.get("gate_definitions")
     if not isinstance(block, dict) or not isinstance(definitions, dict):
@@ -84,12 +99,21 @@ def _readiness_state(readiness: dict[str, Any]) -> tuple[bool, list[str]]:
     required = block.get("required_gates")
     if not isinstance(required, list) or not required:
         raise ConfigurationError("readiness registry declares no required gates")
+
     pending = []
-    for gate in required:
-        definition = definitions.get(gate)
+    for name, definition in definitions.items():
         if not isinstance(definition, dict):
-            raise ConfigurationError(f"readiness gate is undefined: {gate}")
+            raise ConfigurationError(f"readiness gate definition is malformed: {name}")
         if definition.get("status") != "VERIFIED":
-            pending.append(gate)
+            pending.append(name)
+
+    for gate in required:
+        if gate not in definitions:
+            raise ConfigurationError(f"readiness gate is undefined: {gate}")
+    omitted = sorted(set(definitions) - set(required))
+    for name in omitted:
+        if name not in pending:
+            pending.append(name)
+
     return (not pending), sorted(pending)
 

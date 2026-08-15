@@ -201,3 +201,59 @@ class ForgedRegistryTests(unittest.TestCase):
         proc = self._run("--readiness", str(REPO / "00-shared" / "config" / "assessment_readiness.json"))
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(json.loads(proc.stdout)["marking"], "TRAINING_OR_ENGINEERING_USE_ONLY")
+
+
+class RequiredGatesListTests(unittest.TestCase):
+    """L3-F1 (external review, reproduced). `_readiness_state` iterated the
+    author-editable `required_gates` list instead of `gate_definitions`, the record
+    ground truth sits in. Dropping the two PENDING gates from that list - WITHOUT
+    touching their status, which still read PENDING - made this function return
+    ready=True. The exact falsification of PROGRAM-READINESS-GATE-001 that
+    AUD-01/AUD-01b/claim_check-F6 each closed in a DIFFERENT module; this file had no
+    owner when those landed, so the pattern survived here.
+    """
+
+    def test_dropping_pending_gates_from_required_gates_cannot_buy_readiness(self):
+        from aegis_purple.scoring import _readiness_state
+
+        registry = copy.deepcopy(READINESS)
+        pending_names = [n for n, d in registry["gate_definitions"].items()
+                          if d["status"] != "VERIFIED"]
+        self.assertTrue(pending_names, "fixture must have at least one pending gate")
+
+        registry["assessment_readiness"]["required_gates"] = [
+            n for n, d in registry["gate_definitions"].items() if d["status"] == "VERIFIED"
+        ]
+        ready, pending = _readiness_state(registry)
+
+        self.assertFalse(ready, "a PENDING gate omitted from required_gates must still hold")
+        for name in pending_names:
+            self.assertIn(name, pending)
+
+    def test_narrowing_required_gates_flags_every_omission_regardless_of_status(self):
+        """Omitting a gate from required_gates is a failure on its own, even a
+        VERIFIED one - required_gates cannot be used to silently shrink the surface
+        the registry is judged against."""
+        from aegis_purple.scoring import _readiness_state
+
+        registry = copy.deepcopy(READINESS)
+        kept = list(registry["gate_definitions"])[:1]   # keep list non-empty
+        registry["assessment_readiness"]["required_gates"] = kept
+        ready, pending = _readiness_state(registry)
+
+        omitted = sorted(set(registry["gate_definitions"]) - set(kept))
+        still_pending = sorted(n for n, d in registry["gate_definitions"].items()
+                               if d["status"] != "VERIFIED")
+        self.assertEqual(sorted(pending), sorted(set(omitted) | set(still_pending)))
+        self.assertFalse(ready)
+
+    def test_all_verified_still_reaches_readiness(self):
+        """POSITIVE. The fix must not make a genuinely ready registry unreachable."""
+        from aegis_purple.scoring import _readiness_state
+
+        registry = copy.deepcopy(READINESS)
+        for definition in registry["gate_definitions"].values():
+            definition["status"] = "VERIFIED"
+        ready, pending = _readiness_state(registry)
+        self.assertTrue(ready)
+        self.assertEqual(pending, [])
