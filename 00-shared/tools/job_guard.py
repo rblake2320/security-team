@@ -126,14 +126,15 @@ def _run_guarded_windows(argv, *, cwd, env, timeout, max_processes, max_memory_m
     startup.hStdInput = win32api.GetStdHandle(win32api.STD_INPUT_HANDLE)
 
     creationflags = win32process.CREATE_SUSPENDED | win32process.CREATE_NEW_PROCESS_GROUP
-    env_block = None
-    if env is not None:
-        env_block = "".join(f"{k}={v}\0" for k, v in env.items()) + "\0"
-
+    # pywin32's CreateProcess wants the raw mapping for `newEnvironment` (it builds the
+    # null-separated block internally) - passing a pre-built string here made it try
+    # `.values()` on a str and fail on every call that supplied a non-None env, i.e.
+    # every real run_ci.py gate. Only surfaced once this was actually wired in and run
+    # end-to-end; the unit test didn't exercise this path (env=None default).
     try:
         hProcess, hThread, pid, _tid = win32process.CreateProcess(
             None, _quote_cmdline(argv), None, None, True,
-            creationflags, env_block, cwd, startup,
+            creationflags, env, cwd, startup,
         )
     except Exception as exc:
         return GuardedResult(96, "", f"job_guard: CreateProcess failed: {exc}", timed_out=False)
