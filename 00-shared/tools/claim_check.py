@@ -471,6 +471,20 @@ def main():
         by = {}
         for r, cid, msg in viol:
             by.setdefault(cid, []).append((r, msg))
+        # CI-RED investigation (2026-08-15): a violation with claim_id "-" (from
+        # check_evidence's whole-collection-failed case) is invisible below - the
+        # per-claim loop only prints a flag for a claim_id that appears in
+        # reg["claims"], and no real claim has id "-". A run where evidence
+        # collection failed entirely therefore inflated the total violation count
+        # with NO visible explanation anywhere in the human-readable output; only
+        # the raw JSON's violations list carried it. Surface it explicitly, first,
+        # before the per-claim table, since it is exactly the "nothing below can be
+        # trusted" signal that most needs to be seen.
+        if "-" in by:
+            print("EVIDENCE COLLECTION ITSELF FAILED (affects every claim's evidence below):")
+            for r, msg in by["-"]:
+                print(f"  {r}: {msg}")
+            print()
         print(f"CLAIMS ({len(reg['claims'])} registered)")
         counts = {}
         for c in reg["claims"]:
