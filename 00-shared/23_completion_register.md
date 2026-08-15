@@ -1,6 +1,6 @@
 # §24 — Completion Register
 
-← [Index](../README.md) · Related → [§21 Closure Plan](20_closure_plan.md) · [§22 Readiness Gate](21_readiness_gate.md) · [§23 Claim Gate](22_assurance_claims.md)
+← [Index](../README.md) · Related → [§21 Closure Plan](20_closure_plan.md) · [§22 Readiness Gate](21_readiness_gate.md) · [§23 Claim Gate](22_assurance_claims.md) · [§25 Incident Postmortem](24_incident_2026-08-15_recursive_evidence_collection.md)
 
 **Compiled:** 2026-08-14, from repository state — claim registry, readiness config, `.init`
 manifests, CI workflows, and code inspection. **Not from recollection.**

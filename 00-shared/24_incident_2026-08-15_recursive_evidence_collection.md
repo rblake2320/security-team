@@ -1,6 +1,6 @@
-# §24 — Incident: recursive evidence collection (2026-08-15)
+# §25 — Incident: recursive evidence collection (2026-08-15)
 
-← [Index](../README.md) · Related → [§22 Assurance Claims](22_assurance_claims.md) · [§21 Readiness Gate](21_readiness_gate.md)
+← [Index](../README.md) · Related → [§23 Assurance Claims](22_assurance_claims.md) · [§22 Readiness Gate](21_readiness_gate.md) · [§24 Completion Register](23_completion_register.md)
 
 **Status:** closed for the specific defect; one precision item and one deferred
 verification remain open (§6). This document is the permanent record — it does not

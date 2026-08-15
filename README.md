@@ -115,7 +115,7 @@ Every team folder has the same shape:
 | 19 | [`19_aegis_trust_model.md`](00-shared/19_aegis_trust_model.md) | §20 **Five-key trust model** — authorization / execution / evidence / assessment / revocation |
 | 20 | [`20_closure_plan.md`](00-shared/20_closure_plan.md) | §21 **Closure plan** — the seven open items, in prescribed order |
 | 21 | [`21_readiness_gate.md`](00-shared/21_readiness_gate.md) | §22 **Readiness gate + state model** — automated by `PROGRAM-READINESS-GATE-001`; what may and may not be called assurance |
-| 24 | [`24_incident_2026-08-15_recursive_evidence_collection.md`](00-shared/24_incident_2026-08-15_recursive_evidence_collection.md) | §24 **Incident postmortem** — recursive process spawning in the program's own tooling, root cause, fix commits, kernel-enforced containment, standing rule on atomic commits |
+| 24 | [`24_incident_2026-08-15_recursive_evidence_collection.md`](00-shared/24_incident_2026-08-15_recursive_evidence_collection.md) | §25 **Incident postmortem** — recursive process spawning in the program's own tooling, root cause, fix commits, kernel-enforced containment, standing rule on atomic commits |
 
 ### Team charters (§2)
 
