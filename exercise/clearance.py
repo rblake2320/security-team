@@ -199,7 +199,12 @@ def verify(clearance: dict, *, exercise_id: str, mode: str, authorization: dict,
         raise ClearanceError(f"REFUSED [CLEARANCE-EXPIRED] valid {issued} to {expires}, now {now}")
 
     if consume_nonce:
-        consume(clearance["nonce"], clearance["exercise_id"])
+        # Pass the SAME clock used for the expiry decision. Without this, verify()
+        # judged validity against an injected `now` while consume() stamped the ledger
+        # from wall-clock time - two clocks in one operation, so ledger timestamps
+        # could disagree with the validity window that admitted them, and prune
+        # decisions would be made against a different clock than expiry decisions.
+        consume(clearance["nonce"], clearance["exercise_id"], now=now)
     return clearance
 
 
@@ -209,6 +214,20 @@ def verify(clearance: dict, *, exercise_id: str, mode: str, authorization: dict,
 # margin so clock skew or a paused process cannot open a replay window.
 NONCE_RETENTION_SECONDS = CLEARANCE_TTL_SECONDS * 24        # 2 hours for a 5-minute TTL
 NONCE_LEDGER_MAX_ENTRIES = 10_000                            # hard ceiling, fail closed
+
+# The safety above is a COUPLING between two constants, and nothing enforced it. Proven
+# by probe: consuming any nonce prunes entries older than the retention window, after
+# which the pruned nonce IS accepted again. That is unreachable today only because a
+# clearance expires after 300s and CLEARANCE-EXPIRED is raised before consume() runs.
+#
+# Lower this retention below the TTL - a one-line edit, no test would have caught it -
+# and pruning opens a LIVE replay window while clearances are still valid. An invariant
+# that load-bearing must fail loudly at import, not silently at runtime.
+if NONCE_RETENTION_SECONDS <= CLEARANCE_TTL_SECONDS:
+    raise AssertionError(
+        f"nonce retention ({NONCE_RETENTION_SECONDS}s) must exceed the clearance TTL "
+        f"({CLEARANCE_TTL_SECONDS}s); otherwise pruning reopens nonces belonging to "
+        "clearances that are still valid, defeating replay protection")
 
 
 def _prune(used: dict, now: datetime) -> dict:

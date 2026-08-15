@@ -188,3 +188,33 @@ class AtomicWriteTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PruneInvariantTests(unittest.TestCase):
+    """Pruned nonces are reusable; only the TTL/retention coupling makes that safe.
+
+    Probe result: consuming any nonce prunes entries older than the retention window,
+    after which the pruned nonce IS accepted again. Unreachable in practice only
+    because CLEARANCE-EXPIRED is raised before consume() runs. These tests pin BOTH
+    halves of that argument so neither can be removed silently.
+    """
+
+    def test_expiry_gate_precedes_nonce_consumption(self) -> None:
+        """The load-bearing ordering: a stale clearance is refused before consume()."""
+        import inspect
+
+        source = inspect.getsource(clearance.verify)
+        expired_at = source.index("CLEARANCE-EXPIRED")
+        consumed_at = source.index("consume(clearance[")
+        self.assertLess(
+            expired_at, consumed_at,
+            "expiry must be checked BEFORE the nonce is consumed; reversing this makes "
+            "pruned nonces replayable by a still-live clearance",
+        )
+
+    def test_retention_exceeds_ttl(self) -> None:
+        """The coupling nothing enforced until now."""
+        self.assertGreater(
+            clearance.NONCE_RETENTION_SECONDS, clearance.CLEARANCE_TTL_SECONDS,
+            "retention below the TTL opens a live replay window when pruning runs",
+        )
