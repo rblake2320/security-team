@@ -51,6 +51,20 @@ jobs:
         run: python tools/ci_unittest_gate.py --source red-team/src --tests red-team/tests --forbid-skips
       - name: Blue defensive-core tests
         run: python tools/ci_unittest_gate.py --source blue-team/src --tests blue-team/tests
+      # The four teams below are pytest-based. pytest is already part of the reviewed
+      # CI toolchain (tools/requirements-ci.txt). Each runs separately rather than as
+      # one invocation: every team has its own test_scoring.py, and a single run would
+      # collide on the module basename. Separate steps also attribute a failure to a
+      # team without reading the log. Imports resolve via each team's conftest.py, so
+      # these commands are identical on ubuntu and windows.
+      - name: White exercise-control tests
+        run: python 00-shared/tools/run_pytest_gate.py white-team/tests
+      - name: Yellow secure-build tests
+        run: python 00-shared/tools/run_pytest_gate.py yellow-team/tests
+      - name: Green defensibility tests
+        run: python 00-shared/tools/run_pytest_gate.py green-team/tests
+      - name: Orange adversarial-review tests
+        run: python 00-shared/tools/run_pytest_gate.py orange-team/tests
       - name: Program consistency and honest readiness marking
         run: |
           python tools/verify_canonical_packages.py

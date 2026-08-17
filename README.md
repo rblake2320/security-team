@@ -43,13 +43,28 @@ and workforce capability.
 ├── README.md              <- you are here: assumptions, Open Decisions, legend
 ├── 00-shared/             <- cross-team design (§1, §3-§18)
 ├── purple-team/           <- + runnable: Aegis Purple assurance core (src/ docs/ schemas/ tests/)
-├── white-team/   │
-├── yellow-team/  ├─ identical structure (below)
-├── green-team/   │
-├── orange-team/  ┘
+├── white-team/            <- + runnable: Aegis White exercise control (src/ tests/)
+├── yellow-team/           <- + runnable: Aegis Yellow secure-build evidence (src/ tests/)
+├── green-team/            <- + runnable: Aegis Green defensibility (src/ tests/)
+├── orange-team/           <- + runnable: Aegis Orange adversarial design review (src/ tests/)
 ├── blue-team/             <- + runnable: Sentinel Blue (src/ docs/ rules/ schemas/ playbooks/ collectors/)
 └── red-team/              <- + runnable: Aegis Red Team (src/)
 ```
+
+All seven teams now ship runnable code with tests, and every one is a gate in
+`00-shared/config/ci_gates.json`. Each team's capability score is computed from its own
+evidence rather than self-asserted, and each enforces its scorecard's automatic-failure
+conditions before aggregation:
+
+| Team | Package | Anchored in | Automatic failures enforced |
+|---|---|---|---|
+| Purple | `aegis-purple-team` | program assurance model | see `purple-team/config/scorecard.json` |
+| White | `aegis-white-team` | exercise control | activity after a mandatory stop; unauthorized scope expansion |
+| Yellow | `aegis-yellow-team` | NIST SSDF v1.1, SLSA v1.0 | open critical finding; high finding closed without a regression test or documented compensating control |
+| Green | `aegis-green-team` | DeTT&CT data quality, MITRE ATT&CK | critical-asset telemetry below 100%; must-detect technique neither detected nor prevented |
+| Orange | `aegis-orange-team` | STRIDE-per-element | seeded critical attack path missed; unsafe testing performed; critical recommendation without acceptance criteria |
+| Blue | `sentinel-blue` | detection engineering | see `blue-team/config/scorecard.json` |
+| Red | `aegis-red-team` | authorization-first assessment | run without a valid receipt; out-of-scope action; unredacted secret
 
 Every team folder has the same shape:
 

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aegis-yellow-team"
+version = "0.1.0"
+description = "Secure-build evidence: findings to completed engineering work, SSDF coverage, SLSA build level"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+aegis-yellow = "aegis_yellow.cli:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]

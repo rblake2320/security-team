@@ -70,6 +70,42 @@
       "pythonpath": "blue-team/src"
     },
     {
+      "id": "white",
+      "name": "white-team tests",
+      "kind": "command",
+      "argv": [
+        "00-shared/tools/run_pytest_gate.py",
+        "white-team/tests"
+      ]
+    },
+    {
+      "id": "yellow",
+      "name": "yellow-team tests",
+      "kind": "command",
+      "argv": [
+        "00-shared/tools/run_pytest_gate.py",
+        "yellow-team/tests"
+      ]
+    },
+    {
+      "id": "green",
+      "name": "green-team tests",
+      "kind": "command",
+      "argv": [
+        "00-shared/tools/run_pytest_gate.py",
+        "green-team/tests"
+      ]
+    },
+    {
+      "id": "orange",
+      "name": "orange-team tests",
+      "kind": "command",
+      "argv": [
+        "00-shared/tools/run_pytest_gate.py",
+        "orange-team/tests"
+      ]
+    },
+    {
       "id": "claims",
       "name": "claim gate (hold permitted)",
       "kind": "command",

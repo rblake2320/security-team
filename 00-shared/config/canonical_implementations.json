@@ -18,6 +18,30 @@
       "archive_paths": [],
       "decision_date": "2026-08-14",
       "decision_owner": "Program owner"
+    },
+    "aegis-white-team": {
+      "canonical_path": "white-team",
+      "archive_paths": [],
+      "decision_date": "2026-08-17",
+      "decision_owner": "Program owner"
+    },
+    "aegis-yellow-team": {
+      "canonical_path": "yellow-team",
+      "archive_paths": [],
+      "decision_date": "2026-08-17",
+      "decision_owner": "Program owner"
+    },
+    "aegis-green-team": {
+      "canonical_path": "green-team",
+      "archive_paths": [],
+      "decision_date": "2026-08-17",
+      "decision_owner": "Program owner"
+    },
+    "aegis-orange-team": {
+      "canonical_path": "orange-team",
+      "archive_paths": [],
+      "decision_date": "2026-08-17",
+      "decision_owner": "Program owner"
     }
   }
 }
