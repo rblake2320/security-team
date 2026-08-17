@@ -53,6 +53,7 @@ import signal
 import subprocess
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 DEFAULT_MAX_PROCESSES = 25
 DEFAULT_MAX_MEMORY_MB = 4096
@@ -89,11 +90,14 @@ def run_guarded(
 # --------------------------------------------------------------------------- Windows
 
 def _run_guarded_windows(argv, *, cwd, env, timeout, max_processes, max_memory_mb) -> GuardedResult:
+    import tempfile
+    import uuid
+
     import win32api
     import win32con
     import win32event
+    import win32file
     import win32job
-    import win32pipe
     import win32process
     import win32security
 
@@ -109,15 +113,44 @@ def _run_guarded_windows(argv, *, cwd, env, timeout, max_processes, max_memory_m
     info["JobMemoryLimit"] = max_memory_mb * 1024 * 1024
     win32job.SetInformationJobObject(job, win32job.JobObjectExtendedLimitInformation, info)
 
-    # Inheritable pipes so the child's stdout/stderr can be captured, mirroring
-    # subprocess.PIPE semantics - CreateProcess does not accept Python file objects
-    # directly, only OS handles.
+    # FILES, not anonymous pipes, for stdout/stderr capture.
+    #
+    # CONFIRMED LIVE (2026-08-17, not theorised): pipes deadlock here. Windows
+    # inherits a pipe write-handle into every descendant a wrapped gate spawns, not
+    # just the direct child - Python's own subprocess.close_fds=True default does
+    # NOT protect fds 0/1/2, by design, so a gate that itself spawns pytest or
+    # multiprocessing workers (both real, legitimate uses in this program) leaves a
+    # copy of the write handle open in a grandchild. ReadFile on the read end then
+    # blocks forever waiting for an EOF that never comes, because Windows only
+    # signals it once EVERY handle to the write end is closed - not just the direct
+    # child's. Reproduced on two independent gates (exercise/tests' multiprocessing
+    # nonce-race test, claim_check.py's own pytest sub-spawn) with live process
+    # inspection: parent + descendants, all near-zero CPU, all blocked.
+    #
+    # A file does not have this failure mode. The parent does not need the writer
+    # to close anything - it opens its own independent handle to the same file and
+    # reads whatever is there once WaitForSingleObject says the direct child is
+    # done, share-flagged so a still-alive grandchild holding the file open cannot
+    # block that read. This does not fix handle over-inheritance (a descendant can
+    # still write to the file after the direct child exits, in the rare case one
+    # outlives it) but it fixes the DEADLOCK, which is the property that matters
+    # for a CI gate: this call must always return.
+    tmp_dir = Path(tempfile.gettempdir())
+    token = uuid.uuid4().hex
+    out_path = tmp_dir / f"job_guard_out_{token}.log"
+    err_path = tmp_dir / f"job_guard_err_{token}.log"
+
     sa = win32security.SECURITY_ATTRIBUTES()
     sa.bInheritHandle = True
-    out_read, out_write = win32pipe.CreatePipe(sa, 0)
-    err_read, err_write = win32pipe.CreatePipe(sa, 0)
-    win32api.SetHandleInformation(out_read, win32con.HANDLE_FLAG_INHERIT, 0)
-    win32api.SetHandleInformation(err_read, win32con.HANDLE_FLAG_INHERIT, 0)
+    share = win32con.FILE_SHARE_READ | win32con.FILE_SHARE_WRITE | win32con.FILE_SHARE_DELETE
+    out_write = win32file.CreateFile(
+        str(out_path), win32con.GENERIC_WRITE, share, sa,
+        win32con.CREATE_ALWAYS, win32con.FILE_ATTRIBUTE_NORMAL, None,
+    )
+    err_write = win32file.CreateFile(
+        str(err_path), win32con.GENERIC_WRITE, share, sa,
+        win32con.CREATE_ALWAYS, win32con.FILE_ATTRIBUTE_NORMAL, None,
+    )
 
     startup = win32process.STARTUPINFO()
     startup.dwFlags |= win32process.STARTF_USESTDHANDLES
@@ -137,13 +170,18 @@ def _run_guarded_windows(argv, *, cwd, env, timeout, max_processes, max_memory_m
             creationflags, env, cwd, startup,
         )
     except Exception as exc:
+        with contextlib.suppress(Exception):
+            win32api.CloseHandle(out_write)
+            win32api.CloseHandle(err_write)
         return GuardedResult(96, "", f"job_guard: CreateProcess failed: {exc}", timed_out=False)
     finally:
-        # The write ends belong to the child now; the parent must close its copies or
-        # ReadFile on the read end will block forever waiting for a write end that will
-        # never close.
-        win32api.CloseHandle(out_write)
-        win32api.CloseHandle(err_write)
+        # The child has its own inherited copy; the parent's copy must still be
+        # closed so the file isn't held open unnecessarily, but unlike the pipe
+        # case this is cleanup hygiene, not correctness the return value depends on.
+        with contextlib.suppress(Exception):
+            win32api.CloseHandle(out_write)
+        with contextlib.suppress(Exception):
+            win32api.CloseHandle(err_write)
 
     try:
         try:
@@ -154,27 +192,6 @@ def _run_guarded_windows(argv, *, cwd, env, timeout, max_processes, max_memory_m
                                  timed_out=False)
 
         win32process.ResumeThread(hThread)
-
-        stdout_chunks: list[bytes] = []
-        stderr_chunks: list[bytes] = []
-
-        # Read each pipe to EOF in its own thread so a child that writes heavily to
-        # stderr while stdout is quiet (or vice versa) cannot deadlock the parent on a
-        # full pipe buffer.
-        import threading
-
-        def _drain(handle, sink):
-            with contextlib.suppress(Exception):
-                while True:
-                    _err, chunk = win32file_read(handle)
-                    if not chunk:
-                        break
-                    sink.append(chunk)
-
-        t_out = threading.Thread(target=_drain, args=(out_read, stdout_chunks), daemon=True)
-        t_err = threading.Thread(target=_drain, args=(err_read, stderr_chunks), daemon=True)
-        t_out.start()
-        t_err.start()
 
         wait_ms = int(timeout * 1000) if timeout else win32event.INFINITE
         wait_result = win32event.WaitForSingleObject(hProcess, wait_ms)
@@ -190,35 +207,32 @@ def _run_guarded_windows(argv, *, cwd, env, timeout, max_processes, max_memory_m
         else:
             exit_code = win32process.GetExitCodeProcess(hProcess)
 
-        t_out.join(timeout=5)
-        t_err.join(timeout=5)
+        def _read_and_clean(path: Path) -> bytes:
+            data = b""
+            with contextlib.suppress(OSError):
+                data = path.read_bytes()
+            with contextlib.suppress(OSError):
+                path.unlink()
+            return data
 
         return GuardedResult(
             returncode=exit_code,
-            stdout=b"".join(stdout_chunks).decode("utf-8", errors="replace"),
-            stderr=b"".join(stderr_chunks).decode("utf-8", errors="replace"),
+            stdout=_read_and_clean(out_path).decode("utf-8", errors="replace"),
+            stderr=_read_and_clean(err_path).decode("utf-8", errors="replace"),
             timed_out=timed_out,
         )
     finally:
         with contextlib.suppress(Exception):
             win32job.TerminateJobObject(job, 1)
-        for handle in (hThread, hProcess, job, out_read, err_read):
+        for handle in (hThread, hProcess, job):
             with contextlib.suppress(Exception):
                 win32api.CloseHandle(handle)
-
-
-def win32file_read(handle, size=65536):
-    import pywintypes
-    import win32file
-
-    try:
-        return win32file.ReadFile(handle, size)
-    except pywintypes.error as exc:
-        # ERROR_BROKEN_PIPE: the write end closed (child exited) - normal EOF, not a
-        # real failure.
-        if exc.winerror == 109:
-            return (0, b"")
-        raise
+        # Belt and suspenders: _read_and_clean() already unlinks both files on the
+        # success path, but any early return above (CreateProcess/AssignProcessToJob
+        # failure) leaves them on disk with nothing to clean them up.
+        for leftover in (out_path, err_path):
+            with contextlib.suppress(OSError):
+                leftover.unlink()
 
 
 def _quote_cmdline(argv: list[str]) -> str:
