@@ -30,13 +30,21 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
 import sys
 import time
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import job_guard  # noqa: E402
+
 PROGRAM = Path(__file__).resolve().parents[2]
 MANIFEST = PROGRAM / "00-shared" / "config" / "ci_gates.json"
+
+# Explicit, matching the value this file already used before job_guard was wired in
+# (see the comment this replaced) - not job_guard's own default, so the budget stays
+# a visible constant here rather than an implicit value a future caller could rely
+# on without knowing it.
+GATE_TIMEOUT_SECONDS = 1200
 
 
 def load_gates(assurance: bool) -> list[dict]:
@@ -58,21 +66,30 @@ def run_gate(gate: dict) -> tuple[bool, float, str]:
     if gate.get("pythonpath"):
         env["PYTHONPATH"] = str(PROGRAM / gate["pythonpath"])
     t0 = time.time()
-    # LOW (static sweep, 2026-08-15): every sibling gate-runner in this program times
-    # out its subprocess (claim_check.py: 300s per pytest invocation,
-    # ci_unittest_gate.py: 120s) except this one. A hung gate previously hung the
-    # entire local CI run with no way out short of killing it by hand. 1200s covers
-    # the realistic worst case with real margin: the gate-drift gate's own
-    # claim_check.py sub-invocation walks up to 8 packages at up to 300s each if every
-    # one were maximally slow, and the actual measured full pass completes in well
-    # under a minute.
-    try:
-        proc = subprocess.run(build_command(gate), cwd=str(PROGRAM), env=env,
-                              capture_output=True, text=True, timeout=1200)
-    except subprocess.TimeoutExpired as exc:
-        output = ((exc.stdout or "") + (exc.stderr or "")).strip()
-        return False, time.time() - t0, (output + "\nTIMED OUT after 1200s").strip()
-    return proc.returncode == 0, time.time() - t0, (proc.stdout + proc.stderr).strip()
+    # Kernel-enforced process/memory ceiling, not just a subprocess timeout. Built in
+    # direct response to the 2026-08-15 incident this exact gate sequence caused: a
+    # recursive spawn produced 100+ processes before the host became unresponsive.
+    # A plain subprocess timeout bounds WALL TIME but nothing stops a runaway process
+    # tree from exhausting memory or the process table well before the timeout fires.
+    # job_guard wraps the whole tree the gate spawns - not just its direct child - in
+    # a Windows Job Object / POSIX RLIMIT_NPROC ceiling enforced by the OS at
+    # process-creation time.
+    #
+    # Output capture is file-based, not pipe-based (2026-08-17 fix): a pipe deadlocks
+    # here whenever a gate's own descendants spawn further subprocesses (confirmed on
+    # two gates - the multiprocessing-based nonce-race test, and claim_check.py's own
+    # pytest sub-spawn) because Windows inherits the pipe write-handle into every
+    # descendant, and Python's close_fds=True does not protect stdin/stdout/stderr by
+    # design. See job_guard.py's own comment for the full mechanism.
+    result = job_guard.run_guarded(
+        build_command(gate), cwd=str(PROGRAM), env=env, timeout=GATE_TIMEOUT_SECONDS,
+    )
+    if result.timed_out:
+        output = (result.stdout + result.stderr).strip()
+        return False, time.time() - t0, (
+            output + f"\nTIMED OUT / RESOURCE-CAPPED after {GATE_TIMEOUT_SECONDS}s"
+        ).strip()
+    return result.returncode == 0, time.time() - t0, (result.stdout + result.stderr).strip()
 
 
 def main() -> int:
