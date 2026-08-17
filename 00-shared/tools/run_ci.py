@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -72,24 +73,45 @@ def run_gate(gate: dict) -> tuple[bool, float, str]:
     # A plain subprocess timeout bounds WALL TIME but nothing stops a runaway process
     # tree from exhausting memory or the process table well before the timeout fires.
     # job_guard wraps the whole tree the gate spawns - not just its direct child - in
-    # a Windows Job Object / POSIX RLIMIT_NPROC ceiling enforced by the OS at
-    # process-creation time.
+    # a Windows Job Object ceiling enforced by the OS at process-creation time.
     #
-    # Output capture is file-based, not pipe-based (2026-08-17 fix): a pipe deadlocks
-    # here whenever a gate's own descendants spawn further subprocesses (confirmed on
-    # two gates - the multiprocessing-based nonce-race test, and claim_check.py's own
-    # pytest sub-spawn) because Windows inherits the pipe write-handle into every
-    # descendant, and Python's close_fds=True does not protect stdin/stdout/stderr by
-    # design. See job_guard.py's own comment for the full mechanism.
-    result = job_guard.run_guarded(
-        build_command(gate), cwd=str(PROGRAM), env=env, timeout=GATE_TIMEOUT_SECONDS,
-    )
-    if result.timed_out:
-        output = (result.stdout + result.stderr).strip()
-        return False, time.time() - t0, (
-            output + f"\nTIMED OUT / RESOURCE-CAPPED after {GATE_TIMEOUT_SECONDS}s"
+    # Windows-only as of 2026-08-17: job_guard's POSIX path uses
+    # RLIMIT_NPROC(max_processes=25) per-UID, which is not scoped to the gate's own
+    # process tree - Linux enforces it against every process the runner's UID owns.
+    # Wiring it into shared CI cascaded BlockingIOError/RuntimeError("can't start new
+    # thread") across nearly every gate on GitHub Actions' ubuntu-latest, because the
+    # runner's baseline UID process/thread count already sits close to or above 25
+    # before any gate runs. Reproduced live in PR #5's CI logs, not guessed. The
+    # Windows Job Object path has no such per-UID ambiguity (confirmed safe against
+    # two independently hanging gates once output capture was made file-based, see
+    # job_guard.py's own comment) so it stays wired; POSIX falls back to the
+    # unwrapped subprocess call this file used before job_guard existed, bounded by
+    # wall-clock timeout only, until a per-process-tree (not per-UID) POSIX ceiling
+    # replaces RLIMIT_NPROC.
+    if sys.platform == "win32":
+        result = job_guard.run_guarded(
+            build_command(gate), cwd=str(PROGRAM), env=env, timeout=GATE_TIMEOUT_SECONDS,
+        )
+        if result.timed_out:
+            output = (result.stdout + result.stderr).strip()
+            return False, time.time() - t0, (
+                output + f"\nTIMED OUT / RESOURCE-CAPPED after {GATE_TIMEOUT_SECONDS}s"
+            ).strip()
+        return result.returncode == 0, time.time() - t0, (
+            result.stdout + result.stderr
         ).strip()
-    return result.returncode == 0, time.time() - t0, (result.stdout + result.stderr).strip()
+
+    try:
+        proc = subprocess.run(
+            build_command(gate), cwd=str(PROGRAM), env=env,
+            capture_output=True, text=True, timeout=GATE_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        output = ((exc.stdout or "") + (exc.stderr or "")).strip()
+        return False, time.time() - t0, (
+            output + f"\nTIMED OUT after {GATE_TIMEOUT_SECONDS}s"
+        ).strip()
+    return proc.returncode == 0, time.time() - t0, (proc.stdout + proc.stderr).strip()
 
 
 def main() -> int:
