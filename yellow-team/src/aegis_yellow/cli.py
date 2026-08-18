@@ -11,7 +11,9 @@ from .scoring import load_scorecard, score_delivery
 from .slsa import BuildEvidence, determine_level
 from .ssdf import PRACTICES, Attestation, coverage
 
-DEFAULT_SCORECARD = Path(__file__).resolve().parents[3] / "config" / "scorecard.json"
+# parents[2] is the team directory (src/<pkg>/cli.py -> <team>-team). parents[3]
+# would be the repository root, where no scorecard lives.
+DEFAULT_SCORECARD = Path(__file__).resolve().parents[2] / "config" / "scorecard.json"
 
 
 def _emit(payload: object) -> None:
