@@ -65,6 +65,15 @@ jobs:
         run: python 00-shared/tools/run_pytest_gate.py green-team/tests
       - name: Orange adversarial-review tests
         run: python 00-shared/tools/run_pytest_gate.py orange-team/tests
+      # Cross-team layer: the roll-up that combines the seven published weights, the
+      # append-only score history behind drift, and the envelope that carries findings
+      # between teams. These are the seams, and seams are where programs actually fail.
+      - name: Shared primitive drift guard
+        run: python 00-shared/tools/check_shared_primitives.py
+      - name: Program roll-up, history and envelope tests
+        run: |
+          python -m unittest discover -s 00-shared/tools -p 'test_program_*.py' -v
+          python -m unittest discover -s 00-shared/tools -p 'test_finding_envelope.py' -v
       - name: Program consistency and honest readiness marking
         run: |
           python tools/verify_canonical_packages.py

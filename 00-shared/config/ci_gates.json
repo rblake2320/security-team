@@ -32,6 +32,14 @@
       "pattern": "test_gate_manifest.py"
     },
     {
+      "id": "shared-primitives",
+      "name": "shared primitive drift guard",
+      "kind": "command",
+      "argv": [
+        "00-shared/tools/check_shared_primitives.py"
+      ]
+    },
+    {
       "id": "commitment",
       "name": "commitment falsification tests",
       "kind": "unittest",
@@ -104,6 +112,20 @@
         "00-shared/tools/run_pytest_gate.py",
         "orange-team/tests"
       ]
+    },
+    {
+      "id": "program-tools",
+      "name": "program roll-up, history and envelope tests",
+      "kind": "unittest",
+      "path": "00-shared/tools",
+      "pattern": "test_program_*.py"
+    },
+    {
+      "id": "envelope",
+      "name": "cross-team finding envelope tests",
+      "kind": "unittest",
+      "path": "00-shared/tools",
+      "pattern": "test_finding_envelope.py"
     },
     {
       "id": "claims",
