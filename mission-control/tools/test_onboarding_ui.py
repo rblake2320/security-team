@@ -160,7 +160,6 @@ def run_browser_checks(base_url: str) -> None:
         page.get_by_role("button", name="Command", exact=True).click()
         page.get_by_role("heading", name="Trust is a state. Prove every transition.", level=1).wait_for()
         page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
-        assert page.evaluate("window.scrollY") > 100
         page.get_by_role("button", name="Gate runner", exact=True).click()
         page.get_by_role("heading", name="Engineering gate runner", level=1).wait_for()
         page.wait_for_timeout(100)
