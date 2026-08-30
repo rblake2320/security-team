@@ -1,87 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback } from 'react'
+import type { MissionState } from './api-types'
+import { useSnapshotFeed } from './snapshot'
 import type { Engagement, EngagementCreateInput, GateRun, RetentionInput, RunComparison, SafetyLevel, ShadowAIPolicyInput, Snapshot } from './types'
 
-interface MissionState {
-  snapshot: Snapshot | null
-  engagements: Engagement[]
-  connected: boolean
-  error: string | null
-  runGate: (gateId: string, mode?: 'engineering' | 'assurance') => Promise<GateRun>
-  refresh: () => Promise<void>
-  decideTask: (taskId: string, decision: 'approved' | 'rejected') => Promise<void>
-  decideAsset: (assetId: string, disposition: 'approved' | 'restricted' | 'blocked') => Promise<void>
-  decideViolation: (violationId: string, status: 'acknowledged' | 'resolved' | 'false-positive') => Promise<void>
-  updateShadowPolicy: (policy: ShadowAIPolicyInput) => Promise<void>
-  updateRetention: (retention: RetentionInput) => Promise<void>
-  updateSafety: (level: SafetyLevel, reason: string) => Promise<void>
-  provisionConnector: (name: string, capabilities: string[]) => Promise<{ token: string; warning: string }>
-  createEngagement: (input: EngagementCreateInput) => Promise<Engagement>
-  uploadEngagementAssets: (engagementId: string, files: File[]) => Promise<void>
-  launchEngagement: (engagementId: string, mode: 'safe' | 'standard' | 'deep', connectorId?: string, baselineRunId?: string) => Promise<void>
-  analyzeEngagementAsset: (engagementId: string, assetId: string, connectorId?: string) => Promise<void>
-  compareEngagementRuns: (engagementId: string, baselineRunId: string, currentRunId: string) => Promise<RunComparison>
-}
-
 export function useMissionControl(): MissionState {
-  const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
-  const [engagements, setEngagements] = useState<Engagement[]>([])
-  const [connected, setConnected] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const eventSource = useRef<EventSource | null>(null)
-
-  const fetchSnapshot = useCallback(async (): Promise<Snapshot> => {
-    const response = await fetch('/api/snapshot', { cache: 'no-store', credentials: 'same-origin' })
-    if (!response.ok) throw new Error(`Snapshot request failed (${response.status})`)
-    const next = (await response.json()) as Snapshot
-    setSnapshot(next)
-    setConnected(true)
-    setError(null)
-    if (next.deployment.mode === 'saas') {
-      const engagementResponse = await fetch('/api/v1/engagements', { cache: 'no-store', credentials: 'same-origin' })
-      if (engagementResponse.ok) {
-        const engagementPayload = (await engagementResponse.json()) as { engagements: Engagement[] }
-        setEngagements(engagementPayload.engagements)
-      }
-    } else {
-      setEngagements([])
-    }
-    return next
+  const loadEngagements = useCallback(async (_snapshot: Snapshot) => {
+    const response = await fetch('/api/v1/engagements', { cache: 'no-store', credentials: 'same-origin' })
+    if (!response.ok) return []
+    const payload = (await response.json()) as { engagements: Engagement[] }
+    return payload.engagements
   }, [])
-
-  const refresh = useCallback(async () => { await fetchSnapshot() }, [fetchSnapshot])
-
-  useEffect(() => {
-    let polling: number | undefined
-    let cancelled = false
-    void fetchSnapshot().then((initial) => {
-      if (cancelled) return
-      if (initial.deployment.streamingEnabled) {
-        const stream = new EventSource('/api/stream', { withCredentials: true })
-        eventSource.current = stream
-        stream.addEventListener('snapshot', (event) => {
-          setSnapshot(JSON.parse((event as MessageEvent<string>).data) as Snapshot)
-          setConnected(true)
-          setError(null)
-        })
-        stream.onerror = () => {
-          setConnected(false)
-          setError('Live stream reconnecting')
-        }
-      } else {
-        polling = window.setInterval(() => {
-          void fetchSnapshot().catch((reason: unknown) => {
-            setConnected(false)
-            setError(reason instanceof Error ? reason.message : 'Unable to refresh')
-          })
-        }, 5000)
-      }
-    }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : 'Unable to connect'))
-    return () => {
-      cancelled = true
-      if (polling) window.clearInterval(polling)
-      eventSource.current?.close()
-    }
-  }, [fetchSnapshot])
+  const { snapshot, engagements, connected, error, refresh, retryInitial } = useSnapshotFeed(loadEngagements)
 
   const runGate = useCallback(async (gateId: string, mode: 'engineering' | 'assurance' = 'engineering') => {
     const response = await fetch('/api/runs', {
@@ -238,5 +167,8 @@ export function useMissionControl(): MissionState {
     await refresh()
   }, [refresh])
 
-  return { snapshot, engagements, connected, error, runGate, refresh, decideTask, decideAsset, decideViolation, updateShadowPolicy, updateRetention, updateSafety, provisionConnector, createEngagement, uploadEngagementAssets, launchEngagement, analyzeEngagementAsset, compareEngagementRuns }
+  const engagementExportUrl = useCallback((engagementId: string) => `/api/v1/engagements/${encodeURIComponent(engagementId)}/export`, [])
+  const evidenceDownloadUrl = useCallback((evidenceId: string) => `/api/v1/evidence/${encodeURIComponent(evidenceId)}/download`, [])
+
+  return { snapshot, engagements, connected, error, retryInitial, runGate, refresh, decideTask, decideAsset, decideViolation, updateShadowPolicy, updateRetention, updateSafety, provisionConnector, createEngagement, uploadEngagementAssets, launchEngagement, analyzeEngagementAsset, compareEngagementRuns, engagementExportUrl, evidenceDownloadUrl }
 }

@@ -9,6 +9,7 @@ Use both Hostinger and Cloudflare, with different jobs:
 - **This Windows machine:** keeps the private owner console and owner data. Do not point a public tunnel at its operator port.
 
 The public showcase uses a separate stateless container, hostname, and tunnel token. It never mounts the customer database or evidence volumes.
+Its Compose build also selects the dedicated `showcase` web profile. That profile excludes private mutation routes from the browser bundle and emits no public source maps.
 
 ## Required decisions before external release
 
@@ -103,6 +104,7 @@ Configure the demo tunnel route to `http://showcase:8080`. Confirm:
 - `POST /api/runs` returns 403;
 - there is no database/evidence volume or customer connector service;
 - no production `.env` or secret exists in the showcase container.
+- no `.map` artifact, `sourceMappingURL`, `/api/runs`, or `/api/v1/` string exists in the showcase web output.
 
 ## 7. Release and operations gates
 

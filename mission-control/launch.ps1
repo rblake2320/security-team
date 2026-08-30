@@ -12,6 +12,8 @@ $ErrorActionPreference = 'Stop'
 $missionRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $webRoot = Join-Path $missionRoot 'web'
 $distIndex = Join-Path $webRoot 'dist\index.html'
+$profileReceipt = Join-Path $webRoot 'dist\aegis-build-profile.txt'
+$expectedProfile = if ($Mode -eq 'demo') { 'showcase' } else { 'operator' }
 
 if (-not $SkipBuild) {
     if (-not (Test-Path -LiteralPath (Join-Path $webRoot 'node_modules'))) {
@@ -25,14 +27,25 @@ if (-not $SkipBuild) {
         $builtAt = (Get-Item -LiteralPath $distIndex).LastWriteTimeUtc
         $needsBuild = $null -ne ($sourceFiles | Where-Object LastWriteTimeUtc -gt $builtAt | Select-Object -First 1)
     }
+    if (-not $needsBuild) {
+        $actualProfile = if (Test-Path -LiteralPath $profileReceipt) { (Get-Content -Raw -LiteralPath $profileReceipt).Trim() } else { '' }
+        $needsBuild = $actualProfile -ne $expectedProfile
+    }
     if ($needsBuild) {
         Push-Location $webRoot
-        try { npm run build } finally { Pop-Location }
+        try {
+            if ($expectedProfile -eq 'showcase') { npm run build:showcase } else { npm run build }
+        } finally {
+            Pop-Location
+        }
     }
 }
 
 if (-not (Test-Path -LiteralPath $distIndex)) {
     throw 'The web build is missing. Run launch.ps1 without -SkipBuild first.'
+}
+if (-not $SkipBuild -and (Get-Content -Raw -LiteralPath $profileReceipt).Trim() -ne $expectedProfile) {
+    throw "The web build profile does not match requested mode $Mode."
 }
 
 Write-Host "Opening AEGIS Mission Control at http://127.0.0.1:$Port ($Mode mode)" -ForegroundColor Green

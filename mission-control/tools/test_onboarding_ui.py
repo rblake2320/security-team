@@ -117,6 +117,40 @@ def run_browser_checks(base_url: str) -> None:
         browser = playwright.chromium.launch(headless=True)
         errors: list[str] = []
 
+        resilience = browser.new_context(viewport={"width": 1024, "height": 768})
+        hung = resilience.new_page()
+        hung.add_init_script(
+            """
+            window.__aegisOriginalFetch = window.fetch.bind(window);
+            window.fetch = (input, init = {}) => {
+              if (String(input).endsWith('/api/snapshot')) {
+                return new Promise((_resolve, reject) => {
+                  init.signal?.addEventListener(
+                    'abort',
+                    () => reject(new DOMException('Aborted', 'AbortError')),
+                    { once: true },
+                  );
+                });
+              }
+              return window.__aegisOriginalFetch(input, init);
+            };
+            """
+        )
+        hung.goto(base_url, wait_until="domcontentloaded")
+        hung.get_by_text("CONTROL PLANE UNAVAILABLE", exact=True).wait_for(timeout=12_000)
+        assert hung.get_by_text(
+            "The secure status feed is temporarily unavailable. No controls or assurance data have been loaded.",
+            exact=True,
+        ).is_visible()
+        retry = hung.get_by_role("button", name="Retry secure connection")
+        assert retry.is_visible()
+        body = hung.locator("body").inner_text()
+        assert "AbortError" not in body and "Snapshot request failed" not in body
+        hung.evaluate("window.fetch = window.__aegisOriginalFetch")
+        retry.click()
+        wait_for_app(hung)
+        resilience.close()
+
         desktop = browser.new_context(viewport={"width": 1440, "height": 1000})
         page = desktop.new_page()
         page.on(
@@ -227,8 +261,20 @@ def run_browser_checks(base_url: str) -> None:
         assert page.get_by_role("dialog", name="Mission Control orientation").count() == 0
         assert page.locator(".app-shell").get_attribute("data-density") == "compact"
         assert page.locator(".app-shell").evaluate("element => getComputedStyle(element).zoom") == "1.2"
-        page.keyboard.press("Control+0")
-        assert page.locator(".app-shell").evaluate("element => getComputedStyle(element).zoom") == "1"
+        page.evaluate(
+            """() => {
+                window.__aegisZoomShortcutResults = [];
+                window.addEventListener('keydown', event => {
+                    if (event.ctrlKey && ['=', '-', '0'].includes(event.key)) {
+                        window.__aegisZoomShortcutResults.push(event.defaultPrevented);
+                    }
+                });
+            }"""
+        )
+        for shortcut in ("Control+=", "Control+-", "Control+0"):
+            page.keyboard.press(shortcut)
+            assert page.locator(".app-shell").evaluate("element => getComputedStyle(element).zoom") == "1.2"
+        assert page.evaluate("window.__aegisZoomShortcutResults") == [False, False, False]
         page.keyboard.press("?")
         page.get_by_role("dialog", name="Mission Control orientation").wait_for()
         desktop.close()
@@ -430,6 +476,8 @@ def main() -> int:
         "MOBILE_TOUCH_TARGETS=PASS",
         "PUBLIC_CONTROL_AFFORDANCES=PASS",
         "MICROCOPY_LEGIBILITY=PASS",
+        "INITIAL_SNAPSHOT_RECOVERY=PASS",
+        "BROWSER_ZOOM_SHORTCUTS=PASS",
     ):
         print(result)
     return 0

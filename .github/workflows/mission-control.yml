@@ -80,10 +80,18 @@ jobs:
         working-directory: mission-control
         run: python tools/test_onboarding_ui.py
 
+      - name: Build isolated public showcase
+        working-directory: mission-control/web
+        run: npm run build:showcase
+
+      - name: Verify public bundle boundary
+        working-directory: mission-control
+        run: python tools/test_showcase_bundle.py
+
       - name: Upload production shell
         uses: actions/upload-artifact@v7
         with:
-          name: aegis-mission-control-web
+          name: aegis-mission-control-showcase-web
           path: mission-control/web/dist
           if-no-files-found: error
           retention-days: 14
@@ -100,3 +108,9 @@ jobs:
 
       - name: Inspect runtime user
         run: test "$(docker image inspect aegis-mission-control:ci --format '{{.Config.User}}')" = "aegis"
+
+      - name: Build isolated showcase image
+        run: docker build --build-arg AEGIS_WEB_BUILD=showcase --tag aegis-mission-control-showcase:ci ./mission-control
+
+      - name: Inspect showcase runtime user
+        run: test "$(docker image inspect aegis-mission-control-showcase:ci --format '{{.Config.User}}')" = "aegis"

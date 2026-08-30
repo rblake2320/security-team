@@ -762,7 +762,7 @@ function EngagementEditor({ onClose, onCreate }: { onClose: () => void; onCreate
   )
 }
 
-function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUpload, onLaunch, onAnalyze, onCompare, onOpenWorkspace }: {
+function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUpload, onLaunch, onAnalyze, onCompare, onOpenWorkspace, engagementExportUrl, evidenceDownloadUrl }: {
   snapshot: Snapshot
   engagements: Engagement[]
   controlsEnabled: boolean
@@ -772,6 +772,8 @@ function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUplo
   onAnalyze: (engagementId: string, assetId: string, connectorId?: string) => Promise<void>
   onCompare: (engagementId: string, baselineRunId: string, currentRunId: string) => Promise<RunComparison>
   onOpenWorkspace?: () => void
+  engagementExportUrl: (engagementId: string) => string | null
+  evidenceDownloadUrl: (evidenceId: string) => string | null
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(engagements[0]?.id ?? null)
   const [mode, setMode] = useState<'safe' | 'standard' | 'deep'>('safe')
@@ -853,7 +855,7 @@ function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUplo
           {active && <div className="engagement-detail">
             <section className="engagement-hero panel">
               <div><span className="eyebrow">{words(active.engagementType)} / {active.clientName || snapshot.platform.workspace.name}</span><h2>{active.name}</h2><p>{active.objective}</p></div>
-              <div className="engagement-hero__actions"><a className="button button--quiet" href={`/api/v1/engagements/${encodeURIComponent(active.id)}/export`} download><Download size={15} /> Export package</a>{controlsEnabled && <button type="button" className="button button--primary" disabled={!executor || busy === 'launch'} onClick={launch}><Play size={15} />{busy === 'launch' ? 'Queuing…' : 'Queue assessment'}</button>}</div>
+              <div className="engagement-hero__actions">{engagementExportUrl(active.id) && <a className="button button--quiet" href={engagementExportUrl(active.id) ?? undefined} download><Download size={15} /> Export package</a>}{controlsEnabled && <button type="button" className="button button--primary" disabled={!executor || busy === 'launch'} onClick={launch}><Play size={15} />{busy === 'launch' ? 'Queuing…' : 'Queue assessment'}</button>}</div>
               <div className="engagement-metrics"><span><strong>{active.targets.length}</strong><small>Targets</small></span><span><strong>{active.assets.length}</strong><small>Assets</small></span><span><strong>{active.runs.length}</strong><small>Runs</small></span><span><strong>{active.findings.length}</strong><small>Findings</small></span></div>
             </section>
             {notice && <div className={`engagement-notice is-${notice.tone}`}>{notice.tone === 'ok' ? <Check size={15} /> : <AlertTriangle size={15} />}{notice.message}</div>}
@@ -874,7 +876,7 @@ function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUplo
               <section className="panel asset-card">
                 <div className="panel-heading"><div><span>SECURE INTAKE</span><h2>Files, media and evidence</h2></div><Upload size={17} /></div>
                 {controlsEnabled && <label className={`engagement-dropzone ${busy === 'upload' ? 'is-busy' : ''}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); upload(Array.from(event.dataTransfer.files)) }}><input type="file" multiple onChange={(event) => { upload(Array.from(event.target.files ?? [])); event.target.value = '' }} /><Upload size={22} /><strong>{busy === 'upload' ? 'Encrypting and attaching…' : 'Drop anything relevant here'}</strong><span>Documents · repositories as archives · screenshots · audio · video · logs · JSON/CSV · build artifacts</span><small>Files are encrypted per tenant and quarantined before analysis or download.</small></label>}
-                <div className="asset-list">{active.assets.slice(0, 8).map((asset) => <article key={asset.id}><FileCheck2 size={15} /><div><strong>{asset.filename}</strong><span>{words(asset.mediaKind)} · {bytes(asset.sizeBytes)} · SHA {asset.sha256.slice(0, 10)} · {words(asset.analysisStatus)}</span></div><em className={`is-${asset.scanStatus}`}>{words(asset.scanStatus)}</em><div className="asset-file-actions">{asset.scanStatus === 'clean' && <a href={`/api/v1/evidence/${encodeURIComponent(asset.evidenceId)}/download`} download aria-label={`Download ${asset.filename}`}><Download size={14} /></a>}{asset.scanStatus === 'clean' && analyzer && controlsEnabled && <button type="button" disabled={busy === `analysis-${asset.id}` || asset.analysisStatus === 'queued'} onClick={() => analyze(asset.id)} aria-label={`Analyze ${asset.filename}`}><Sparkles size={14} /></button>}</div></article>)}</div>
+                <div className="asset-list">{active.assets.slice(0, 8).map((asset) => <article key={asset.id}><FileCheck2 size={15} /><div><strong>{asset.filename}</strong><span>{words(asset.mediaKind)} · {bytes(asset.sizeBytes)} · SHA {asset.sha256.slice(0, 10)} · {words(asset.analysisStatus)}</span></div><em className={`is-${asset.scanStatus}`}>{words(asset.scanStatus)}</em><div className="asset-file-actions">{asset.scanStatus === 'clean' && evidenceDownloadUrl(asset.evidenceId) && <a href={evidenceDownloadUrl(asset.evidenceId) ?? undefined} download aria-label={`Download ${asset.filename}`}><Download size={14} /></a>}{asset.scanStatus === 'clean' && analyzer && controlsEnabled && <button type="button" disabled={busy === `analysis-${asset.id}` || asset.analysisStatus === 'queued'} onClick={() => analyze(asset.id)} aria-label={`Analyze ${asset.filename}`}><Sparkles size={14} /></button>}</div></article>)}</div>
                 {active.assets[0]?.suggestions?.length > 0 && <div className="suggestion-box"><Sparkles size={16} /><div><strong>Suggested next reviews</strong>{active.assets[0].suggestions.map((suggestion) => <p key={`${suggestion.team}-${suggestion.title}`}><b>{words(suggestion.team)}</b> · {suggestion.title} — {suggestion.detail}</p>)}</div></div>}
               </section>
               <section className="panel history-card">
@@ -1461,7 +1463,7 @@ function ViewPanel({ scale, density, fullscreen, onScale, onDensity, onFullscree
           <button type="button" className="button button--quiet" onClick={onFullscreen}><Maximize2 size={15} />{fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}</button>
           <button type="button" className="button button--quiet" onClick={onReset}><RotateCcw size={15} />Reset view</button>
         </div>
-        <div className="view-shortcuts"><span>KEYBOARD</span><div><kbd>Ctrl</kbd><b>+</b><span>Larger</span><kbd>Ctrl</kbd><b>−</b><span>Smaller</span><kbd>Ctrl</kbd><b>0</b><span>Reset</span></div></div>
+        <div className="view-shortcuts"><span>KEYBOARD</span><div><kbd>Ctrl</kbd><b>K</b><span>Commands</span><kbd>?</kbd><b>—</b><span>Guide</span></div><p>Browser zoom shortcuts remain controlled by your browser.</p></div>
       </div>
     </Modal>
   )
@@ -1488,19 +1490,20 @@ function CommandDeck({ setView, runGate, onClose, busy, controlsEnabled }: { set
   )
 }
 
-function Loading({ error }: { error: string | null }) {
+function Loading({ error, onRetry }: { error: string | null; onRetry: () => void }) {
   return (
     <main className="loading-screen">
       <Logo />
       <div className="loading-scan"><i /></div>
       <strong>{error ? 'CONTROL PLANE UNAVAILABLE' : 'ESTABLISHING TRUST CHANNEL'}</strong>
       <span>{error ?? 'Reading authoritative manifests…'}</span>
+      {error && <button type="button" className="loading-retry" onClick={onRetry}><RefreshCw size={14} /> Retry secure connection</button>}
     </main>
   )
 }
 
 export default function App() {
-  const { snapshot, engagements, connected, error, runGate, refresh, decideTask, decideAsset, decideViolation, updateShadowPolicy, updateRetention, updateSafety, provisionConnector, createEngagement, uploadEngagementAssets, launchEngagement, analyzeEngagementAsset, compareEngagementRuns } = useMissionControl()
+  const { snapshot, engagements, connected, error, retryInitial, runGate, refresh, decideTask, decideAsset, decideViolation, updateShadowPolicy, updateRetention, updateSafety, provisionConnector, createEngagement, uploadEngagementAssets, launchEngagement, analyzeEngagementAsset, compareEngagementRuns, engagementExportUrl, evidenceDownloadUrl } = useMissionControl()
   const [view, setViewState] = useState<View>(viewFromLocation)
   const [commandOpen, setCommandOpen] = useState(false)
   const [assuranceOpen, setAssuranceOpen] = useState(false)
@@ -1568,18 +1571,6 @@ export default function App() {
         setGuideOpen(true)
         return
       }
-      if (!editing && (event.metaKey || event.ctrlKey) && ['+', '=', '-', '0'].includes(event.key)) {
-        event.preventDefault()
-        if (event.key === '0') {
-          setViewScale(100)
-          return
-        }
-        setViewScale((current) => {
-          const index = viewScales.indexOf(current)
-          const direction = event.key === '-' ? -1 : 1
-          return viewScales[Math.max(0, Math.min(viewScales.length - 1, index + direction))]
-        })
-      }
     }
     window.addEventListener('keydown', shortcut)
     return () => window.removeEventListener('keydown', shortcut)
@@ -1616,7 +1607,7 @@ export default function App() {
     return () => window.clearTimeout(timer)
   }, [toast])
 
-  if (!snapshot) return <Loading error={error} />
+  if (!snapshot) return <Loading error={error} onRetry={retryInitial} />
   const controlsEnabled = snapshot.deployment.controlsEnabled
 
   const closeGuide = () => {
@@ -1660,7 +1651,7 @@ export default function App() {
         <MarkingBar snapshot={snapshot} />
         <main className="app-content">
           {view === 'overview' && <Overview snapshot={snapshot} runGate={execute} setView={setView} busy={busy} controlsEnabled={controlsEnabled} />}
-          {view === 'engagements' && <EngagementsView snapshot={snapshot} engagements={engagements} controlsEnabled={controlsEnabled} onNew={() => setEngagementOpen(true)} onUpload={uploadEngagementAssets} onLaunch={launchEngagement} onAnalyze={analyzeEngagementAsset} onCompare={compareEngagementRuns} onOpenWorkspace={() => setView('workspace')} />}
+          {view === 'engagements' && <EngagementsView snapshot={snapshot} engagements={engagements} controlsEnabled={controlsEnabled} onNew={() => setEngagementOpen(true)} onUpload={uploadEngagementAssets} onLaunch={launchEngagement} onAnalyze={analyzeEngagementAsset} onCompare={compareEngagementRuns} onOpenWorkspace={() => setView('workspace')} engagementExportUrl={engagementExportUrl} evidenceDownloadUrl={evidenceDownloadUrl} />}
           {view === 'coverage' && <CoverageView snapshot={snapshot} />}
           {view === 'shadow' && <ShadowAIView snapshot={snapshot} controlsEnabled={controlsEnabled} onAssetDecision={(assetId, disposition) => control(decideAsset(assetId, disposition), `AI asset marked ${disposition}`)} onViolationDecision={(violationId, status) => control(decideViolation(violationId, status), `Violation ${status}`)} onEditPolicy={() => setPolicyOpen(true)} />}
           {view === 'teams' && <TeamsView snapshot={snapshot} runGate={execute} busy={busy} controlsEnabled={controlsEnabled} />}

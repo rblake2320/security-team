@@ -15,14 +15,12 @@ if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
     throw 'cloudflared is not installed or is not on PATH.'
 }
 
-if (-not (Test-Path -LiteralPath $distIndex)) {
-    Push-Location $webRoot
-    try {
-        if (-not (Test-Path -LiteralPath (Join-Path $webRoot 'node_modules'))) { npm ci }
-        npm run build
-    } finally {
-        Pop-Location
-    }
+Push-Location $webRoot
+try {
+    if (-not (Test-Path -LiteralPath (Join-Path $webRoot 'node_modules'))) { npm ci }
+    npm run build:showcase
+} finally {
+    Pop-Location
 }
 
 New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null

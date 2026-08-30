@@ -3,7 +3,8 @@ WORKDIR /build/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
-RUN npm run build
+ARG AEGIS_WEB_BUILD=operator
+RUN if [ "$AEGIS_WEB_BUILD" = "showcase" ]; then npm run build:showcase; else npm run build; fi
 
 FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 \

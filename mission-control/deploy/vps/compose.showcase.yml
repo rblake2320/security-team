@@ -11,6 +11,8 @@ services:
     build:
       context: ../..
       dockerfile: Dockerfile
+      args:
+        AEGIS_WEB_BUILD: showcase
     image: aegis-mission-control:${AEGIS_IMAGE_TAG:-local}
     restart: unless-stopped
     entrypoint: ["python", "server.py"]
