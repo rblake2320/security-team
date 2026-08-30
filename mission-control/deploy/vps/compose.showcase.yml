@@ -13,7 +13,7 @@ services:
       dockerfile: Dockerfile
       args:
         AEGIS_WEB_BUILD: showcase
-    image: aegis-mission-control:${AEGIS_IMAGE_TAG:-local}
+    image: aegis-mission-control-showcase:${AEGIS_IMAGE_TAG:-local}
     restart: unless-stopped
     entrypoint: ["python", "server.py"]
     command: ["--host", "0.0.0.0", "--port", "8080", "--mode", "demo", "--root", "/nonexistent"]
