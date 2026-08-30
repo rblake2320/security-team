@@ -42,7 +42,7 @@ import {
   X,
   Zap,
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { useMissionControl } from './api'
 import type { AuditRecord, Engagement, EngagementCreateInput, GateRun, ReadinessGate, RetentionInput, RunComparison, SafetyLevel, SecurityControl, SecurityTeam, ShadowAIData, ShadowAIPolicyInput, Snapshot, Team } from './types'
 
@@ -64,6 +64,23 @@ const nav: Array<{ id: View; label: string; icon: typeof LayoutDashboard }> = [
   { id: 'workspace', label: 'Workspace controls', icon: SlidersHorizontal },
   { id: 'evidence', label: 'Evidence', icon: FileCheck2 },
 ]
+
+const viewHash: Record<View, string> = {
+  overview: '#/command',
+  engagements: '#/engagements',
+  coverage: '#/security-coverage',
+  shadow: '#/shadow-ai',
+  teams: '#/seven-teams',
+  gates: '#/gate-runner',
+  agents: '#/live-agents',
+  workspace: '#/workspace-controls',
+  evidence: '#/evidence',
+}
+
+function viewFromLocation(): View {
+  const entry = (Object.entries(viewHash) as Array<[View, string]>).find(([, hash]) => hash === window.location.hash)
+  return entry?.[0] ?? 'overview'
+}
 
 function words(value: string): string {
   return value.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase())
@@ -154,7 +171,7 @@ function NavRail({ view, setView }: { view: View; setView: (view: View) => void 
           <i key={team} className={`team-${team}`} />
         ))}
       </div>
-      <button type="button" className="rail-avatar" aria-label="Local operator">RB</button>
+      <div className="rail-avatar" aria-label="Local operator identity">RB</div>
     </aside>
   )
 }
@@ -218,14 +235,14 @@ function MarkingBar({ snapshot }: { snapshot: Snapshot }) {
   const demo = snapshot.deployment.mode === 'demo'
   const saas = snapshot.deployment.mode === 'saas'
   return (
-    <div className={`marking-bar ${demo ? 'is-demo' : ''}`}>
+    <aside className={`marking-bar ${demo ? 'is-demo' : ''}`} aria-label="Data safety classification">
       {demo ? <Radio size={13} /> : <LockKeyhole size={13} />}
       <span>{demo ? 'PUBLIC_READ_ONLY_SHOWCASE' : saas ? 'TENANT_ISOLATED_WORKSPACE' : snapshot.program.marking}</span>
       <i />
       <span>{demo ? 'SYNTHETIC AGENT FEED' : saas ? 'CUSTOMER DATA BOUNDARY ACTIVE' : 'ASSURANCE OUTPUT LOCKED'}</span>
       <i />
       <span>{demo ? 'CONTROL ACTIONS REMOVED' : saas ? 'RAW AI PROMPTS NOT RETAINED' : 'DIAGNOSTIC OPERATIONS PERMITTED'}</span>
-    </div>
+    </aside>
   )
 }
 
@@ -321,7 +338,7 @@ function TeamCard({ team, onRun, busy, expanded = false }: { team: Team; onRun: 
         <div className="team-card__monogram">{team.id.slice(0, 2).toUpperCase()}</div>
         <div>
           <span>{team.verb}</span>
-          <h3>{team.name}</h3>
+          {expanded ? <h2>{team.name}</h2> : <h3>{team.name}</h3>}
         </div>
         <em className={`run-status is-${team.status}`}>{statusText(team.status)}</em>
       </header>
@@ -368,7 +385,7 @@ function ActivityFeed({ activity, runs }: { activity: AuditRecord[]; runs: GateR
   return (
     <div className="activity-feed">
       <div className="panel-heading">
-        <div><span>LIVE CONTROL LOG</span><h3>Watchfloor activity</h3></div>
+        <div><span>LIVE CONTROL LOG</span><h2>Watchfloor activity</h2></div>
         <Radio size={16} />
       </div>
       <div className="activity-feed__rows">
@@ -400,10 +417,10 @@ function Stat({ label, value, hint, icon }: { label: string; value: ReactNode; h
   )
 }
 
-function SectionHeading({ overline, title, detail, action }: { overline: string; title: string; detail: string; action?: ReactNode }) {
+function SectionHeading({ overline, title, detail, action, nested = false }: { overline: string; title: string; detail: string; action?: ReactNode; nested?: boolean }) {
   return (
     <div className="section-heading">
-      <div><span>{overline}</span><h2>{title}</h2><p>{detail}</p></div>
+      <div><span>{overline}</span>{nested ? <h2>{title}</h2> : <h1 data-view-heading tabIndex={-1}>{title}</h1>}<p>{detail}</p></div>
       {action}
     </div>
   )
@@ -417,7 +434,7 @@ function Overview({ snapshot, runGate, setView, busy, controlsEnabled }: { snaps
       <section className="brief">
         <div className="brief__copy">
           <span className="eyebrow"><Zap size={12} fill="currentColor" /> COMMAND BRIEF / {snapshot.generatedAt.slice(0, 10)}</span>
-          <h1>Trust is a state.<br /><em>Prove every transition.</em></h1>
+          <h1 data-view-heading tabIndex={-1}>Trust is a state.<br /><em>Prove every transition.</em></h1>
           <p>{program.rationale}</p>
           <div className="brief__actions">
             <button type="button" className="button button--primary" onClick={() => setView('gates')}>
@@ -448,14 +465,14 @@ function Overview({ snapshot, runGate, setView, busy, controlsEnabled }: { snaps
       <section className="trust-grid">
         <div className="panel lifecycle-panel">
           <div className="panel-heading">
-            <div><span>TRUST SPINE</span><h3>Program state machine</h3></div>
+              <div><span>TRUST SPINE</span><h2>Program state machine</h2></div>
             <div className="state-chip"><i />{words(program.currentState)}</div>
           </div>
           <Lifecycle program={program} />
         </div>
         <div className="panel readiness-panel">
           <div className="panel-heading">
-            <div><span>HARD PREREQUISITES</span><h3>Readiness contract</h3></div>
+            <div><span>HARD PREREQUISITES</span><h2>Readiness contract</h2></div>
             <span className="counter">{program.verified}/{program.total}</span>
           </div>
           <div className="readiness-list">
@@ -467,6 +484,7 @@ function Overview({ snapshot, runGate, setView, busy, controlsEnabled }: { snaps
 
       <section className="team-section">
         <SectionHeading
+          nested
           overline="SEVEN FUNCTIONS / ONE OPERATING MODEL"
           title="The security spectrum"
           detail="Each team owns a distinct decision boundary. No score can average away an automatic failure."
@@ -506,19 +524,21 @@ function GatesView({ snapshot, runGate, busy, onAssurance, controlsEnabled }: { 
         action={
           <div className="heading-actions">
             <button type="button" className="button button--quiet button--danger" onClick={onAssurance} disabled={busy || !controlsEnabled}><LockKeyhole size={15} /> Readiness check</button>
-            <button type="button" className="button button--primary" onClick={() => runGate('all')} disabled={busy || !controlsEnabled}>{busy ? <RefreshCw className="spin" size={15} /> : <Play size={15} fill="currentColor" />} {controlsEnabled ? 'Run all gates' : 'Read-only demo'}</button>
+            {controlsEnabled
+              ? <button type="button" className="button button--primary" onClick={() => runGate('all')} disabled={busy}>{busy ? <RefreshCw className="spin" size={15} /> : <Play size={15} fill="currentColor" />} Run all gates</button>
+              : <span className="button button--status" role="status" aria-label="Control actions are unavailable in this public showcase"><LockKeyhole size={15} /> Read-only demo</span>}
           </div>
         }
       />
       <div className="gate-layout">
         <section className="panel gate-list-panel">
           <div className="panel-heading">
-            <div><span>MANIFEST / {snapshot.gates.engineeringCount} GATES</span><h3>Verification matrix</h3></div>
+            <div><span>MANIFEST / {snapshot.gates.engineeringCount} GATES</span><h2>Verification matrix</h2></div>
             <StatusDot online={!busy && controlsEnabled} label={!controlsEnabled ? 'Runner locked' : (busy ? 'Runner occupied' : 'Runner ready')} />
           </div>
-          <div className="gate-table" role="table">
+          <div className="gate-table" role="list" aria-label="Engineering verification gates">
             {snapshot.gates.engineering.map((gate, index) => (
-              <div className="gate-row" role="row" key={gate.id}>
+              <div className="gate-row" role="listitem" key={gate.id}>
                 <span className="gate-row__index">{String(index + 1).padStart(2, '0')}</span>
                 <div className="gate-row__name"><strong>{gate.name}</strong><small>{gate.id} · {gate.kind}</small></div>
                 <RunBadge status={gate.status} />
@@ -567,7 +587,7 @@ function AgentsView({ snapshot }: { snapshot: Snapshot }) {
       </div>
       <div className="agent-layout">
         <section className="panel session-panel">
-          <div className="panel-heading"><div><span>ATTACHED SESSIONS</span><h3>Security-team activity</h3></div><Bot size={17} /></div>
+          <div className="panel-heading"><div><span>ATTACHED SESSIONS</span><h2>Security-team activity</h2></div><Bot size={17} /></div>
           <div className="session-list">
             {snapshot.agents.sessions.map((session) => (
               <article className="session" key={`${session.agent}-${session.sessionId}`}>
@@ -583,7 +603,7 @@ function AgentsView({ snapshot }: { snapshot: Snapshot }) {
           </div>
         </section>
         <section className="panel collision-panel">
-          <div className="panel-heading"><div><span>CONCURRENCY SAFETY</span><h3>Workspace collisions</h3></div><AlertTriangle size={17} /></div>
+          <div className="panel-heading"><div><span>CONCURRENCY SAFETY</span><h2>Workspace collisions</h2></div><AlertTriangle size={17} /></div>
           {(snapshot.agents.collisions ?? []).map((collision) => (
             <article className="collision" key={`${collision.workspace}-${collision.branch}`}>
               <span>{collision.sessions.length} SESSIONS</span><strong>{collision.workspace}</strong><p>{collision.reason}</p>
@@ -615,11 +635,11 @@ function EvidenceView({ snapshot }: { snapshot: Snapshot }) {
       </div>
       <div className="evidence-grid">
         <section className="panel">
-          <div className="panel-heading"><div><span>READINESS EVIDENCE</span><h3>Hard-gate registry</h3></div><span className="counter">{snapshot.program.verified}/{snapshot.program.total}</span></div>
+          <div className="panel-heading"><div><span>READINESS EVIDENCE</span><h2>Hard-gate registry</h2></div><span className="counter">{snapshot.program.verified}/{snapshot.program.total}</span></div>
           <div className="evidence-gates">{snapshot.program.gates.map((gate) => <ReadinessItem gate={gate} key={gate.id} />)}</div>
         </section>
         <section className="panel">
-          <div className="panel-heading"><div><span>OPERATOR PROVENANCE</span><h3>Audit chain</h3></div><Fingerprint size={17} /></div>
+          <div className="panel-heading"><div><span>OPERATOR PROVENANCE</span><h2>Audit chain</h2></div><Fingerprint size={17} /></div>
           <div className="audit-chain">
             {snapshot.activity.map((item) => (
               <div className="audit-item" key={item.id}><i /><div><strong>{item.summary}</strong><span>{shortTime(item.at)} · {item.hash.slice(0, 12)}</span></div></div>
@@ -628,7 +648,7 @@ function EvidenceView({ snapshot }: { snapshot: Snapshot }) {
           </div>
         </section>
         <section className="panel worktree-panel">
-          <div className="panel-heading"><div><span>WORKTREE SIGNAL</span><h3>Current changes</h3></div><GitBranch size={17} /></div>
+          <div className="panel-heading"><div><span>WORKTREE SIGNAL</span><h2>Current changes</h2></div><GitBranch size={17} /></div>
           <div className="change-list">{snapshot.repo.changes.map((change) => <code key={change}>{change}</code>)}</div>
         </section>
       </div>
@@ -811,7 +831,7 @@ function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUplo
       <div className="view engagements-view">
         <SectionHeading overline="AUTHORIZED SECURITY WORK" title="Bring the target. Keep the proof." detail="AEGIS turns an owned site, pre-launch build, or client assessment into a scoped seven-team engagement with durable evidence, repeatable runs, comparison, and export." />
         <div className="engagement-template-grid">{engagementTemplates.map((template) => { const Icon = template.icon; return <article key={template.type}><Icon size={20} /><strong>{template.label}</strong><p>{template.detail}</p><span>WORKSPACE-ISOLATED</span></article> })}</div>
-        <TenantOnly title="Public mode demonstrates the workflow without accepting targets." detail="Customer workspaces receive drag-and-drop intake, authorization records, encrypted assets, governed team execution, comparisons, and export. The public showcase cannot collect data or launch tests." />
+        <TenantOnly nested title="Public mode demonstrates the workflow without accepting targets." detail="Customer workspaces receive drag-and-drop intake, authorization records, encrypted assets, governed team execution, comparisons, and export. The public showcase cannot collect data or launch tests." />
       </div>
     )
   }
@@ -822,12 +842,12 @@ function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUplo
       {engagements.length === 0 ? (
         <div className="engagement-empty">
           <div className="engagement-template-grid">{engagementTemplates.map((template) => { const Icon = template.icon; return <article key={template.type}><Icon size={20} /><strong>{template.label}</strong><p>{template.detail}</p></article> })}</div>
-          <div><Target size={28} /><h3>Your first work order starts here.</h3><p>Record authority, define the exact target and stop conditions, then attach the site, repository, documents, screenshots, audio, video or other evidence.</p>{controlsEnabled && <button type="button" className="button button--primary" onClick={onNew}><Plus size={15} /> Create engagement</button>}</div>
+          <div><Target size={28} /><h2>Your first work order starts here.</h2><p>Record authority, define the exact target and stop conditions, then attach the site, repository, documents, screenshots, audio, video or other evidence.</p>{controlsEnabled && <button type="button" className="button button--primary" onClick={onNew}><Plus size={15} /> Create engagement</button>}</div>
         </div>
       ) : (
         <div className="engagement-console">
           <aside className="engagement-register panel">
-            <div className="panel-heading"><div><span>WORK REGISTER</span><h3>{engagements.length} engagement{engagements.length === 1 ? '' : 's'}</h3></div><FolderOpen size={17} /></div>
+            <div className="panel-heading"><div><span>WORK REGISTER</span><h2>{engagements.length} engagement{engagements.length === 1 ? '' : 's'}</h2></div><FolderOpen size={17} /></div>
             <div>{engagements.map((engagement) => <button type="button" key={engagement.id} className={active?.id === engagement.id ? 'is-active' : ''} onClick={() => { setSelectedId(engagement.id); setComparison(null) }}><span className={`engagement-status is-${engagement.status}`}><i />{words(engagement.status)}</span><strong>{engagement.name}</strong><small>{engagement.clientName || words(engagement.engagementType)} · {engagement.targets.length} target{engagement.targets.length === 1 ? '' : 's'}</small><em>{engagement.findings.length} findings</em></button>)}</div>
           </aside>
           {active && <div className="engagement-detail">
@@ -839,26 +859,26 @@ function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUplo
             {notice && <div className={`engagement-notice is-${notice.tone}`}>{notice.tone === 'ok' ? <Check size={15} /> : <AlertTriangle size={15} />}{notice.message}</div>}
             <div className="engagement-detail-grid">
               <section className="panel scope-card">
-                <div className="panel-heading"><div><span>AUTHORITY + SCOPE</span><h3>Fail-closed work boundary</h3></div><LockKeyhole size={17} /></div>
+                <div className="panel-heading"><div><span>AUTHORITY + SCOPE</span><h2>Fail-closed work boundary</h2></div><LockKeyhole size={17} /></div>
                 <div className="authorization-seal"><ShieldCheck size={22} /><div><strong>AUTHORITY RECORDED</strong><span>{words(active.authorization.basis)} · {active.authorization.expiresAt ? `expires ${new Date(active.authorization.expiresAt).toLocaleDateString()}` : 'no recorded expiry'}</span></div></div>
                 <p>{active.scopeRules}</p>
                 <div className="target-list">{active.targets.map((target) => <article key={target.id}><Globe2 size={15} /><div><strong>{target.displayName}</strong><code>{target.locator}</code></div><span>{words(target.environment)}</span></article>)}</div>
               </section>
               <section className="panel launch-card">
-                <div className="panel-heading"><div><span>EXECUTION CONTRACT</span><h3>Seven-team work order</h3></div><Users size={17} /></div>
+                <div className="panel-heading"><div><span>EXECUTION CONTRACT</span><h2>Seven-team work order</h2></div><Users size={17} /></div>
                 <div className="team-run-strip">{active.selectedTeams.map((team) => <span key={team} className={`team-${team}`}><i />{team.slice(0, 2).toUpperCase()}</span>)}</div>
                 <label><span>Assessment depth</span><select value={mode} onChange={(event) => setMode(event.target.value as 'safe' | 'standard' | 'deep')}><option value="safe">Safe — passive + non-destructive</option><option value="standard">Standard — authorized active validation</option><option value="deep">Deep — expanded tests, still within scope</option></select></label>
                 {executor ? <div className="executor-state is-ready"><Radio size={14} /><span><strong>{executor.name}</strong> allowlisted for assessment.execute</span></div> : <div className="executor-state is-blocked"><AlertTriangle size={14} /><span><strong>Executor required.</strong> Provision a tenant connector with assessment.execute; AEGIS will not pretend work ran without one.</span>{controlsEnabled && <button type="button" onClick={onOpenWorkspace}>Open workspace controls</button>}</div>}
                 <small>Every launch creates one high-risk work order and human approval. Destructive actions remain separately gated.</small>
               </section>
               <section className="panel asset-card">
-                <div className="panel-heading"><div><span>SECURE INTAKE</span><h3>Files, media and evidence</h3></div><Upload size={17} /></div>
+                <div className="panel-heading"><div><span>SECURE INTAKE</span><h2>Files, media and evidence</h2></div><Upload size={17} /></div>
                 {controlsEnabled && <label className={`engagement-dropzone ${busy === 'upload' ? 'is-busy' : ''}`} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); upload(Array.from(event.dataTransfer.files)) }}><input type="file" multiple onChange={(event) => { upload(Array.from(event.target.files ?? [])); event.target.value = '' }} /><Upload size={22} /><strong>{busy === 'upload' ? 'Encrypting and attaching…' : 'Drop anything relevant here'}</strong><span>Documents · repositories as archives · screenshots · audio · video · logs · JSON/CSV · build artifacts</span><small>Files are encrypted per tenant and quarantined before analysis or download.</small></label>}
                 <div className="asset-list">{active.assets.slice(0, 8).map((asset) => <article key={asset.id}><FileCheck2 size={15} /><div><strong>{asset.filename}</strong><span>{words(asset.mediaKind)} · {bytes(asset.sizeBytes)} · SHA {asset.sha256.slice(0, 10)} · {words(asset.analysisStatus)}</span></div><em className={`is-${asset.scanStatus}`}>{words(asset.scanStatus)}</em><div className="asset-file-actions">{asset.scanStatus === 'clean' && <a href={`/api/v1/evidence/${encodeURIComponent(asset.evidenceId)}/download`} download aria-label={`Download ${asset.filename}`}><Download size={14} /></a>}{asset.scanStatus === 'clean' && analyzer && controlsEnabled && <button type="button" disabled={busy === `analysis-${asset.id}` || asset.analysisStatus === 'queued'} onClick={() => analyze(asset.id)} aria-label={`Analyze ${asset.filename}`}><Sparkles size={14} /></button>}</div></article>)}</div>
                 {active.assets[0]?.suggestions?.length > 0 && <div className="suggestion-box"><Sparkles size={16} /><div><strong>Suggested next reviews</strong>{active.assets[0].suggestions.map((suggestion) => <p key={`${suggestion.team}-${suggestion.title}`}><b>{words(suggestion.team)}</b> · {suggestion.title} — {suggestion.detail}</p>)}</div></div>}
               </section>
               <section className="panel history-card">
-                <div className="panel-heading"><div><span>DURABLE HISTORY</span><h3>Runs and comparison</h3></div>{active.runs.length >= 2 && <button type="button" onClick={compare} disabled={busy === 'compare'}><GitCompareArrows size={14} /> Compare latest</button>}</div>
+                <div className="panel-heading"><div><span>DURABLE HISTORY</span><h2>Runs and comparison</h2></div>{active.runs.length >= 2 && <button type="button" onClick={compare} disabled={busy === 'compare'}><GitCompareArrows size={14} /> Compare latest</button>}</div>
                 <div className="run-history">{active.runs.map((run) => <article key={run.id}><span>#{String(run.sequence).padStart(2, '0')}</span><div><strong>{words(run.mode)} assessment</strong><small>{shortTime(run.createdAt)} · {run.taskId ? `task ${run.taskId.slice(0, 8)}` : 'plan only'}</small></div><RunBadge status={run.status} />{run.score != null && <em>{run.score}/100</em>}</article>)}{active.runs.length === 0 && <div className="empty-row"><Clock3 size={18} /><span>No assessment runs yet<br /><small>The first approved work order becomes the baseline.</small></span></div>}</div>
                 {comparison && <div className="comparison-strip"><span className="is-new"><strong>{comparison.counts.introduced}</strong><small>Introduced</small></span><span><strong>{comparison.counts.persistent}</strong><small>Persistent</small></span><span className="is-resolved"><strong>{comparison.counts.resolved}</strong><small>Resolved</small></span></div>}
                 <div className="finding-list">{active.findings.slice(0, 8).map((finding) => <article key={finding.id}><i className={`severity-${finding.severity}`} /><div><strong>{finding.title}</strong><span>{finding.ownerTeam ? words(finding.ownerTeam) : 'Unassigned'} · {words(finding.status)}</span></div><em>{finding.severity.toUpperCase()}</em></article>)}</div>
@@ -871,11 +891,11 @@ function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUplo
   )
 }
 
-function TenantOnly({ title, detail }: { title: string; detail: string }) {
+function TenantOnly({ title, detail, nested = false }: { title: string; detail: string; nested?: boolean }) {
   return (
     <div className="tenant-only">
       <LockKeyhole size={28} />
-      <strong>{title}</strong>
+      {nested ? <h2>{title}</h2> : <h1 data-view-heading tabIndex={-1}>{title}</h1>}
       <p>{detail}</p>
       <span>AVAILABLE IN AN ISOLATED CUSTOMER WORKSPACE</span>
     </div>
@@ -984,7 +1004,7 @@ function ShadowAIView({
       </section>
       <div className="shadow-layout">
         <section className="panel shadow-inventory">
-          <div className="panel-heading"><div><span>AI ASSET INVENTORY</span><h3>Known, unknown, and governed</h3></div><span className="counter">{shadow.assets.length}</span></div>
+          <div className="panel-heading"><div><span>AI ASSET INVENTORY</span><h2>Known, unknown, and governed</h2></div><span className="counter">{shadow.assets.length}</span></div>
           <div className="shadow-table">
             {shadow.assets.map((asset) => (
               <article className="shadow-asset" key={asset.id}>
@@ -1002,7 +1022,7 @@ function ShadowAIView({
           </div>
         </section>
         <section className="panel violation-queue">
-          <div className="panel-heading"><div><span>POLICY VIOLATIONS</span><h3>Decisions required</h3></div><ShieldAlert size={17} /></div>
+          <div className="panel-heading"><div><span>POLICY VIOLATIONS</span><h2>Decisions required</h2></div><ShieldAlert size={17} /></div>
           <div>
             {shadow.violations.filter((item) => item.status === 'open').map((violation) => (
               <article className={`violation is-${violation.severity}`} key={violation.id}>
@@ -1037,14 +1057,14 @@ function WorkspaceView({ snapshot, controlsEnabled, onTaskDecision, onEditRetent
       </section>
       <div className="workspace-grid">
         <section className="panel connector-board">
-          <div className="panel-heading"><div><span>OUTBOUND-ONLY CONNECTORS</span><h3>Customer signal plane</h3></div><button type="button" className="panel-action" disabled={!controlsEnabled} onClick={onProvisionConnector}>Add connector</button></div>
+          <div className="panel-heading"><div><span>OUTBOUND-ONLY CONNECTORS</span><h2>Customer signal plane</h2></div><button type="button" className="panel-action" disabled={!controlsEnabled} onClick={onProvisionConnector}>Add connector</button></div>
           <div>
             {platform.connectors.map((connector) => <article key={connector.id}><span className={`connector-state is-${connector.status}`}><i />{connector.status}</span><strong>{connector.name}</strong><small>v{connector.version} · {connector.capabilities.length} scoped capabilities</small><code>{connector.capabilities.slice(0, 4).join(' · ')}</code></article>)}
             {platform.connectors.length === 0 && <div className="empty-row"><Network size={19} /><span>No connector provisioned<br /><small>Create a scoped credential to begin onboarding.</small></span></div>}
           </div>
         </section>
         <section className="panel approval-board">
-          <div className="panel-heading"><div><span>HUMAN AUTHORIZATION</span><h3>Approval queue</h3></div><span className="counter">{pending.length}</span></div>
+          <div className="panel-heading"><div><span>HUMAN AUTHORIZATION</span><h2>Approval queue</h2></div><span className="counter">{pending.length}</span></div>
           <div>
             {pending.map((approval) => {
               const task = taskById.get(approval.taskId)
@@ -1054,7 +1074,7 @@ function WorkspaceView({ snapshot, controlsEnabled, onTaskDecision, onEditRetent
           </div>
         </section>
         <section className="panel retention-board">
-          <div className="panel-heading"><div><span>DATA LIFECYCLE</span><h3>Retention and legal hold</h3></div><button type="button" className="panel-action" disabled={!controlsEnabled} onClick={onEditRetention}>Edit retention</button></div>
+          <div className="panel-heading"><div><span>DATA LIFECYCLE</span><h2>Retention and legal hold</h2></div><button type="button" className="panel-action" disabled={!controlsEnabled} onClick={onEditRetention}>Edit retention</button></div>
           <div className="retention-track"><span><strong>{platform.retention.telemetryDays}</strong><small>Telemetry days</small></span><i /><span><strong>{platform.retention.taskDays}</strong><small>Task days</small></span><i /><span><strong>{platform.retention.evidenceDays}</strong><small>Evidence days</small></span><i /><span><strong>{platform.retention.auditDays}</strong><small>Audit days</small></span></div>
           <p>{platform.retention.legalHoldDefault ? 'New evidence is placed on legal hold by default.' : 'Legal hold is record-specific. Expired data requires an explicit purge confirmation.'}</p>
         </section>
@@ -1229,15 +1249,73 @@ function ConnectorEditor({ onClose, onProvision }: { onClose: () => void; onProv
 }
 
 function Modal({ children, onClose, label, className = '' }: { children: ReactNode; onClose: () => void; label: string; className?: string }) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
   useEffect(() => {
-    const close = (event: KeyboardEvent) => event.key === 'Escape' && onClose()
-    window.addEventListener('keydown', close)
-    return () => window.removeEventListener('keydown', close)
+    onCloseRef.current = onClose
   }, [onClose])
+  useLayoutEffect(() => {
+    const dialog = dialogRef.current
+    if (!dialog) return
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const background = Array.from(document.querySelectorAll<HTMLElement>('.app-stage, .nav-rail')).map((element) => ({
+      element,
+      inert: element.inert,
+      ariaHidden: element.getAttribute('aria-hidden'),
+    }))
+    background.forEach(({ element }) => {
+      element.inert = true
+      element.setAttribute('aria-hidden', 'true')
+    })
+
+    const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    )).filter((element) => !element.hasAttribute('hidden') && element.getClientRects().length > 0)
+    const initial = dialog.querySelector<HTMLElement>('[data-modal-initial-focus]') ?? focusable()[0] ?? dialog
+    let mounted = true
+    window.queueMicrotask(() => {
+      if (mounted) initial.focus({ preventScroll: true })
+    })
+    const containFocus = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCloseRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const items = focusable()
+      if (items.length === 0) {
+        event.preventDefault()
+        dialog.focus({ preventScroll: true })
+        return
+      }
+      const first = items[0]
+      const last = items[items.length - 1]
+      const active = document.activeElement
+      if (event.shiftKey && (active === first || !dialog.contains(active))) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', containFocus, true)
+    return () => {
+      mounted = false
+      document.removeEventListener('keydown', containFocus, true)
+      background.forEach(({ element, inert, ariaHidden }) => {
+        element.inert = inert
+        if (ariaHidden == null) element.removeAttribute('aria-hidden')
+        else element.setAttribute('aria-hidden', ariaHidden)
+      })
+      if (previousFocus && document.contains(previousFocus)) previousFocus.focus({ preventScroll: true })
+    }
+  }, [])
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className={`modal ${className}`} role="dialog" aria-modal="true" aria-label={label}>
-        <button type="button" className="modal__close" onClick={onClose} aria-label="Close"><X size={17} /></button>
+      <div ref={dialogRef} className={`modal ${className}`} role="dialog" aria-modal="true" aria-label={label} tabIndex={-1}>
+        <button type="button" className="modal__close" onClick={onClose} aria-label="Close" data-modal-initial-focus><X size={17} /></button>
         {children}
       </div>
     </div>
@@ -1423,7 +1501,7 @@ function Loading({ error }: { error: string | null }) {
 
 export default function App() {
   const { snapshot, engagements, connected, error, runGate, refresh, decideTask, decideAsset, decideViolation, updateShadowPolicy, updateRetention, updateSafety, provisionConnector, createEngagement, uploadEngagementAssets, launchEngagement, analyzeEngagementAsset, compareEngagementRuns } = useMissionControl()
-  const [view, setView] = useState<View>('overview')
+  const [view, setViewState] = useState<View>(viewFromLocation)
   const [commandOpen, setCommandOpen] = useState(false)
   const [assuranceOpen, setAssuranceOpen] = useState(false)
   const [policyOpen, setPolicyOpen] = useState(false)
@@ -1451,6 +1529,30 @@ export default function App() {
   const [fullscreen, setFullscreen] = useState(Boolean(document.fullscreenElement))
   const [toast, setToast] = useState<{ tone: 'ok' | 'error'; message: string } | null>(null)
   const busy = useMemo(() => snapshot?.runs.some((run) => run.status === 'queued' || run.status === 'running') ?? false, [snapshot?.runs])
+
+  const setView = (next: View) => {
+    const nextHash = viewHash[next]
+    if (window.location.hash !== nextHash) window.history.pushState({ aegisView: next }, '', nextHash)
+    setViewState(next)
+  }
+
+  useEffect(() => {
+    const syncView = () => setViewState(viewFromLocation())
+    window.addEventListener('popstate', syncView)
+    window.addEventListener('hashchange', syncView)
+    return () => {
+      window.removeEventListener('popstate', syncView)
+      window.removeEventListener('hashchange', syncView)
+    }
+  }, [])
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+      document.querySelector<HTMLElement>('.app-content [data-view-heading]')?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [view])
 
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {

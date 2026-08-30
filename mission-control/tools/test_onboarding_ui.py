@@ -58,6 +58,44 @@ def wait_for_app(page) -> None:
     page.locator(".app-shell").wait_for()
 
 
+def assert_focus_is_inside(page, dialog, label: str) -> None:
+    expected_label = dialog.get_attribute("aria-label")
+    try:
+        page.wait_for_function(
+            "expected => document.activeElement?.closest('[role=\"dialog\"]')?.getAttribute('aria-label') === expected",
+            arg=expected_label,
+            timeout=1_000,
+        )
+    except PlaywrightTimeoutError:
+        active = page.evaluate(
+            "() => ({tag: document.activeElement?.tagName, className: document.activeElement?.className, label: document.activeElement?.getAttribute('aria-label')})"
+        )
+        raise AssertionError(f"Keyboard focus escaped {label}: {active}")
+
+
+def assert_focus_trap(page, dialog, label: str) -> None:
+    for _ in range(20):
+        page.keyboard.press("Tab")
+        assert_focus_is_inside(page, dialog, label)
+    for _ in range(20):
+        page.keyboard.press("Shift+Tab")
+        assert_focus_is_inside(page, dialog, label)
+
+
+def assert_mobile_touch_targets(page) -> None:
+    targets = page.locator(".nav-rail button, .topbar__right .utility-trigger, .topbar__right .command-trigger")
+    assert targets.count() > 0
+    for index in range(targets.count()):
+        target = targets.nth(index)
+        if not target.is_visible():
+            continue
+        box = target.bounding_box()
+        assert box is not None
+        assert box["width"] >= 44 and box["height"] >= 44, (
+            f"Mobile touch target is smaller than 44px: {box}"
+        )
+
+
 def run_browser_checks(base_url: str) -> None:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
@@ -76,6 +114,8 @@ def run_browser_checks(base_url: str) -> None:
 
         guide = page.get_by_role("dialog", name="Mission Control orientation")
         guide.wait_for()
+        assert_focus_is_inside(page, guide, "orientation guide")
+        assert_focus_trap(page, guide, "orientation guide")
         assert "synthetic and every control action is removed" in guide.inner_text()
         for label in (
             "START / COMMAND",
@@ -93,12 +133,69 @@ def run_browser_checks(base_url: str) -> None:
         assert page.get_by_role("button", name="Evidence").get_attribute("aria-current") == "page"
         page.get_by_role("button", name="Engagements").click()
         page.get_by_text("Bring the target. Keep the proof.").wait_for()
+        assert page.evaluate("window.location.hash") == "#/engagements"
+        assert page.locator("main h1").count() == 1
         assert "without accepting targets" in page.locator(".tenant-only").inner_text()
+        assert float(page.locator(".engagement-template-grid span").first.evaluate("element => parseFloat(getComputedStyle(element).fontSize)")) >= 12
         assert_no_horizontal_clip(page, "engagement preview")
 
-        page.get_by_role("button", name="Open the Mission Control guide").click()
+        guide_trigger = page.get_by_role("button", name="Open the Mission Control guide")
+        guide_trigger.click()
         guide.wait_for()
-        guide.get_by_role("button", name="Close").click()
+        assert_focus_is_inside(page, guide, "reopened orientation guide")
+        page.keyboard.press("Escape")
+        guide.wait_for(state="detached")
+        assert guide_trigger.evaluate("element => element === document.activeElement")
+
+        command_trigger = page.locator(".command-trigger")
+        command_trigger.click()
+        command = page.get_by_role("dialog", name="Command deck")
+        command.wait_for()
+        assert_focus_is_inside(page, command, "command deck")
+        assert_focus_trap(page, command, "command deck")
+        page.keyboard.press("Escape")
+        command.wait_for(state="detached")
+        assert command_trigger.evaluate("element => element === document.activeElement")
+
+        page.get_by_role("button", name="Command", exact=True).click()
+        page.get_by_role("heading", name="Trust is a state. Prove every transition.", level=1).wait_for()
+        page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+        assert page.evaluate("window.scrollY") > 100
+        page.get_by_role("button", name="Gate runner", exact=True).click()
+        page.get_by_role("heading", name="Engineering gate runner", level=1).wait_for()
+        page.wait_for_timeout(100)
+        assert page.evaluate("window.location.hash") == "#/gate-runner"
+        assert page.evaluate("window.scrollY") <= 1
+        assert page.locator("main h1").count() == 1
+        assert page.locator("main h1").evaluate("element => element === document.activeElement")
+        assert page.locator('[role="row"]').count() == 0
+        assert page.get_by_role("list", name="Engineering verification gates").count() == 1
+        assert page.get_by_role("list", name="Engineering verification gates").get_by_role("listitem").count() > 0
+        assert page.get_by_role("button", name="Control actions are unavailable in this public showcase").count() == 0
+        assert page.get_by_role("status", name="Control actions are unavailable in this public showcase").count() == 1
+        assert float(page.locator(".console-empty span").evaluate("element => parseFloat(getComputedStyle(element).fontSize)")) >= 12
+
+        page.get_by_role("button", name="Engagements").click()
+        page.get_by_text("Bring the target. Keep the proof.").wait_for()
+        page.go_back()
+        page.get_by_role("heading", name="Engineering gate runner", level=1).wait_for()
+        assert page.evaluate("window.location.hash") == "#/gate-runner"
+
+        for destination in (
+            "Command",
+            "Engagements",
+            "Security coverage",
+            "Shadow AI defense",
+            "Seven teams",
+            "Gate runner",
+            "Live agents",
+            "Workspace controls",
+            "Evidence",
+        ):
+            page.get_by_role("button", name=destination, exact=True).click()
+            page.wait_for_timeout(30)
+            assert page.locator("main h1").count() == 1, f"{destination} must expose exactly one h1"
+            assert page.locator("main h1[data-view-heading]").count() == 1
 
         page.get_by_role("button", name="Adjust view size, currently 100%").click()
         view_dialog = page.get_by_role("dialog", name="Adjust Mission Control view")
@@ -133,10 +230,21 @@ def run_browser_checks(base_url: str) -> None:
         wait_for_app(phone)
         phone_guide = phone.get_by_role("dialog", name="Mission Control orientation")
         phone_guide.wait_for()
+        assert_focus_is_inside(phone, phone_guide, "mobile orientation guide")
+        assert_focus_trap(phone, phone_guide, "mobile orientation guide")
         assert_no_horizontal_clip(phone, "mobile guide")
         phone.screenshot(path=ARTIFACTS / "onboarding-mobile.png", full_page=False)
         phone_guide.get_by_role("button", name="Close").click()
         assert phone.get_by_role("button", name="Open the Mission Control guide").is_visible()
+        assert phone.locator('button[aria-label="Local operator identity"]').count() == 0
+        assert_mobile_touch_targets(phone)
+        phone.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+        assert phone.evaluate("window.scrollY") > 100
+        phone.get_by_role("button", name="Gate runner", exact=True).click()
+        phone.get_by_role("heading", name="Engineering gate runner", level=1).wait_for()
+        phone.wait_for_timeout(100)
+        assert phone.evaluate("window.scrollY") <= 1
+        assert phone.get_by_role("heading", name="Engineering gate runner", level=1).is_visible()
         view_button = phone.get_by_role("button", name="Adjust view size, currently 100%")
         assert view_button.is_visible()
         view_button.click()
@@ -298,6 +406,13 @@ def main() -> int:
         "ENGAGEMENT_WORKFLOW=PASS",
         "MEDIA_INTAKE=PASS",
         "ENGAGEMENT_MOBILE=PASS",
+        "VIEW_ROUTING_HISTORY=PASS",
+        "MOBILE_SCROLL_RESET=PASS",
+        "MODAL_FOCUS_TRAP=PASS",
+        "ARIA_SEMANTICS=PASS",
+        "MOBILE_TOUCH_TARGETS=PASS",
+        "PUBLIC_CONTROL_AFFORDANCES=PASS",
+        "MICROCOPY_LEGIBILITY=PASS",
     ):
         print(result)
     return 0

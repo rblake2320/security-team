@@ -5,8 +5,19 @@ import re
 import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 bad = []
+GENERATED_DIRS = {
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".tox",
+    ".venv",
+    "__pycache__",
+    "node_modules",
+    "venv",
+}
 for base, dirs, files in os.walk(ROOT):
-    dirs[:] = [d for d in dirs if d not in {".git", "__pycache__", ".ruff_cache", "node_modules"}]
+    dirs[:] = [d for d in dirs if d not in GENERATED_DIRS]
     for fn in files:
         if not fn.endswith(".md"):
             continue
