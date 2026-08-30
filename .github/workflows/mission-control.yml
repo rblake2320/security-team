@@ -109,6 +109,25 @@ jobs:
       - name: Inspect runtime user
         run: test "$(docker image inspect aegis-mission-control:ci --format '{{.Config.User}}')" = "aegis"
 
+      - name: Smoke test production container
+        shell: bash
+        run: |
+          set -euo pipefail
+          container_id="$(docker run --detach aegis-mission-control:ci)"
+          trap 'docker rm --force "$container_id" >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 1 30); do
+            if docker exec "$container_id" python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=2).read()"; then
+              exit 0
+            fi
+            if [ "$(docker inspect --format '{{.State.Running}}' "$container_id")" != true ]; then
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 1
+          done
+          docker logs "$container_id"
+          exit 1
+
       - name: Build isolated showcase image
         run: docker build --build-arg AEGIS_WEB_BUILD=showcase --tag aegis-mission-control-showcase:ci ./mission-control
 

@@ -19,7 +19,8 @@ COPY migrations/ ./migrations/
 COPY alembic.ini saas_server.py server.py ./
 COPY deploy/vps/entrypoint.sh /usr/local/bin/aegis-entrypoint
 COPY --from=web-build /build/web/dist ./web/dist/
-RUN chmod 0555 /usr/local/bin/aegis-entrypoint \
+RUN sed -i 's/\r$//' /usr/local/bin/aegis-entrypoint \
+    && chmod 0555 /usr/local/bin/aegis-entrypoint \
     && mkdir -p /var/lib/aegis/evidence \
     && chown -R aegis:aegis /app /var/lib/aegis
 USER aegis
