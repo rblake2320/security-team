@@ -71,6 +71,11 @@ class MissionControlContractTests(unittest.TestCase):
             self.assertTrue(control.allow_control_request(identity))
         self.assertFalse(control.allow_control_request(identity))
 
+    def test_missing_static_assets_never_fall_back_to_the_spa_shell(self) -> None:
+        self.assertFalse(server.allows_spa_fallback("assets/index.js.map"))
+        self.assertFalse(server.allows_spa_fallback("security.txt"))
+        self.assertTrue(server.allows_spa_fallback("evidence"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -65,6 +65,11 @@ def bounded(value: Any, limit: int = 1200) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
+def allows_spa_fallback(relative_path: str) -> bool:
+    """Only extensionless application routes may receive the SPA shell."""
+    return not relative_path.startswith("assets/") and not Path(relative_path).suffix
+
+
 def run_process(argv: list[str], cwd: Path, timeout: float = 8.0) -> tuple[int, str]:
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     try:
@@ -735,6 +740,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             candidate.relative_to(self.control.dist)
         except ValueError:
+            return self._json(404, {"error": "not found"})
+        if not candidate.is_file() and not allows_spa_fallback(relative):
             return self._json(404, {"error": "not found"})
         if not candidate.is_file():
             candidate = self.control.dist / "index.html"
