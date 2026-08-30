@@ -1,0 +1,17 @@
+runtime/
+.venv/
+.env
+.env.*
+!.env.example
+!.env.*.example
+!deploy/vps/.env.*.example
+backups/
+web/node_modules/
+web/dist/
+web/*.tsbuildinfo
+deploy/cloudflare/config.yml
+deploy/cloudflare/*.json
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/

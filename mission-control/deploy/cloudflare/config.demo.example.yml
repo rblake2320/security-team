@@ -1,0 +1,12 @@
+# Optional stable public showcase. This route MUST point to demo mode on port 8766.
+# Never point a public, unauthenticated hostname at the operator port (8765).
+tunnel: <TUNNEL-UUID>
+credentials-file: "C:\\Users\\<WINDOWS-USER>\\.cloudflared\\<TUNNEL-UUID>.json"
+
+ingress:
+  - hostname: demo-mission.<YOUR-DOMAIN>
+    service: http://127.0.0.1:8766
+    originRequest:
+      connectTimeout: 10s
+      tcpKeepAlive: 30s
+  - service: http_status:404

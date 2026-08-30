@@ -1,0 +1,17 @@
+# Named Cloudflare Tunnel for the private operator console.
+# Replace every angle-bracket placeholder. Never commit the credentials JSON.
+tunnel: <TUNNEL-UUID>
+credentials-file: "C:\\Users\\<WINDOWS-USER>\\.cloudflared\\<TUNNEL-UUID>.json"
+
+ingress:
+  - hostname: mission.<YOUR-DOMAIN>
+    service: http://127.0.0.1:8765
+    originRequest:
+      connectTimeout: 10s
+      tcpKeepAlive: 30s
+      access:
+        required: true
+        teamName: <CLOUDFLARE-ZERO-TRUST-TEAM-NAME>
+        audTag:
+          - <ACCESS-APPLICATION-AUD-TAG>
+  - service: http_status:404

@@ -1,0 +1,18 @@
+[Unit]
+Description=AEGIS Mission Control daily backup
+Requires=docker.service
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=aegis-deploy
+Group=aegis-deploy
+SupplementaryGroups=docker
+WorkingDirectory=/opt/aegis/current/deploy/vps
+Environment=DOCKER_CONFIG=/tmp
+ExecStart=/usr/libexec/docker/cli-plugins/docker-compose --env-file .env.production -f compose.production.yml --profile maintenance run --rm backup
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/aegis

@@ -1,0 +1,11 @@
+[Unit]
+Description=Run AEGIS Mission Control backup every day
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 UTC
+RandomizedDelaySec=15m
+Persistent=true
+Unit=aegis-backup.service
+
+[Install]
+WantedBy=timers.target

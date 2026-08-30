@@ -1,0 +1,88 @@
+name: aegis-mission-control
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    env_file: .env.production
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [private]
+    security_opt: ["no-new-privileges:true"]
+    logging: *default-logging
+
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: aegis-mission-control:${AEGIS_IMAGE_TAG:-local}
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      AEGIS_HOST: 0.0.0.0
+      AEGIS_PORT: 8080
+      EVIDENCE_ROOT: /var/lib/aegis/evidence
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8780:8080"
+    volumes:
+      - evidence-data:/var/lib/aegis/evidence
+    networks: [private, edge]
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,noexec,nosuid,nodev
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    logging: *default-logging
+
+  tunnel:
+    image: cloudflare/cloudflared:2026.8.2
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?set in .env.production}
+    depends_on:
+      app:
+        condition: service_healthy
+    networks: [edge]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    logging: *default-logging
+
+  backup:
+    image: postgres:16-alpine
+    profiles: ["maintenance"]
+    env_file: .env.production
+    entrypoint: ["/opt/aegis/backup.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backup.sh:/opt/aegis/backup.sh:ro
+      - evidence-data:/var/lib/aegis/evidence:ro
+      - backup-data:/var/backups/aegis
+    networks: [private]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    logging: *default-logging
+
+networks:
+  private:
+    internal: true
+  edge:
+
+volumes:
+  postgres-data:
+  evidence-data:
+  backup-data:

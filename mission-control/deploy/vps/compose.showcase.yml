@@ -1,0 +1,41 @@
+name: aegis-public-showcase
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  showcase:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: aegis-mission-control:${AEGIS_IMAGE_TAG:-local}
+    restart: unless-stopped
+    entrypoint: ["python", "server.py"]
+    command: ["--host", "0.0.0.0", "--port", "8080", "--mode", "demo", "--root", "/nonexistent"]
+    environment:
+      AEGIS_ALLOW_DEMO_BIND: "1"
+    expose: ["8080"]
+    networks: [showcase-edge]
+    read_only: true
+    tmpfs:
+      - /app/runtime:size=16m,noexec,nosuid,nodev
+      - /tmp:size=32m,noexec,nosuid,nodev
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    logging: *default-logging
+
+  tunnel:
+    image: cloudflare/cloudflared:2026.8.2
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${SHOWCASE_TUNNEL_TOKEN:?set in .env.showcase}
+    depends_on: [showcase]
+    networks: [showcase-edge]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    logging: *default-logging
+
+networks:
+  showcase-edge:

@@ -1,0 +1,11 @@
+.git
+.venv
+.pytest_cache
+runtime
+web/node_modules
+web/dist
+tests
+*.pyc
+__pycache__
+.env*
+!*.env.example
