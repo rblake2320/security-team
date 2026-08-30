@@ -401,7 +401,7 @@ kbd { padding: 3px 5px; border: 1px solid var(--line); border-radius: 2px; backg
 .section-heading > div:first-child > span { color: var(--acid); font: 500 8px/1 'IBM Plex Mono', monospace; letter-spacing: .18em; }
 .section-heading h1 { margin: 9px 0 4px; font-size: clamp(25px, 2.2vw, 36px); font-weight: 540; line-height: 1; letter-spacing: -.045em; }
 .section-heading p { max-width: 650px; margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
-.text-action { display: inline-flex; align-items: center; gap: 6px; padding: 6px 0; border: 0; border-bottom: 1px solid var(--line-bright); background: none; color: #aab0af; font-size: 10px; cursor: pointer; }
+.text-action { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 0; border: 0; border-bottom: 1px solid var(--line-bright); background: none; color: #aab0af; font-size: 10px; cursor: pointer; }
 .text-action:hover { color: var(--acid); border-color: var(--acid); }
 .heading-actions { display: flex; gap: 8px; }
 
@@ -661,8 +661,9 @@ kbd { padding: 3px 5px; border: 1px solid var(--line); border-radius: 2px; backg
 .loading-screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle, rgba(201,244,93,.035), transparent 27rem); }
 .loading-scan { position: relative; width: 180px; height: 1px; margin: 40px 0 22px; overflow: hidden; background: var(--line); }
 .loading-scan i { position: absolute; width: 50%; height: 1px; background: var(--acid); animation: scan 1.5s ease-in-out infinite; }
-.loading-screen > strong { font: 500 9px/1 'IBM Plex Mono', monospace; letter-spacing: .16em; }
-.loading-screen > span { max-width: 520px; margin-top: 9px; color: var(--muted); font-size: 10px; line-height: 1.6; text-align: center; }
+.loading-screen > h1 { margin: 0; font: 500 9px/1 'IBM Plex Mono', monospace; letter-spacing: .16em; }
+.loading-message { max-width: 520px; margin: 9px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; text-align: center; }
+.loading-message:empty { margin-top: 0; }
 .loading-retry { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; margin-top: 20px; padding: 0 17px; border: 1px solid var(--line-bright); background: #0a0e11; color: var(--ink); font: 500 9px/1 'IBM Plex Mono', monospace; letter-spacing: .06em; cursor: pointer; }
 .loading-retry:hover { border-color: rgba(201,244,93,.55); color: var(--acid); }
 

@@ -98,7 +98,10 @@ def assert_focus_trap(page, dialog, label: str) -> None:
 
 
 def assert_mobile_touch_targets(page) -> None:
-    targets = page.locator(".nav-rail button, .topbar__right .utility-trigger, .topbar__right .command-trigger")
+    targets = page.locator(
+        ".nav-rail button, .topbar__right .utility-trigger, "
+        ".topbar__right .command-trigger, .text-action"
+    )
     assert targets.count() > 0
     for index in range(targets.count()):
         target = targets.nth(index)
@@ -138,10 +141,18 @@ def run_browser_checks(base_url: str) -> None:
         )
         hung.goto(base_url, wait_until="domcontentloaded")
         hung.get_by_text("CONTROL PLANE UNAVAILABLE", exact=True).wait_for(timeout=12_000)
+        assert hung.get_by_role(
+            "heading", name="CONTROL PLANE UNAVAILABLE", level=1
+        ).count() == 1
+        alert = hung.get_by_role("alert")
+        assert alert.count() == 1
+        assert alert.get_attribute("aria-live") == "assertive"
+        assert alert.get_attribute("aria-atomic") == "true"
         assert hung.get_by_text(
             "The secure status feed is temporarily unavailable. No controls or assurance data have been loaded.",
             exact=True,
         ).is_visible()
+        assert "secure status feed is temporarily unavailable" in alert.inner_text()
         retry = hung.get_by_role("button", name="Retry secure connection")
         assert retry.is_visible()
         body = hung.locator("body").inner_text()
@@ -477,7 +488,9 @@ def main() -> int:
         "PUBLIC_CONTROL_AFFORDANCES=PASS",
         "MICROCOPY_LEGIBILITY=PASS",
         "INITIAL_SNAPSHOT_RECOVERY=PASS",
+        "SNAPSHOT_ERROR_ANNOUNCEMENT=PASS",
         "BROWSER_ZOOM_SHORTCUTS=PASS",
+        "SECONDARY_TOUCH_TARGETS=PASS",
     ):
         print(result)
     return 0

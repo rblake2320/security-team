@@ -1495,8 +1495,13 @@ function Loading({ error, onRetry }: { error: string | null; onRetry: () => void
     <main className="loading-screen">
       <Logo />
       <div className="loading-scan"><i /></div>
-      <strong>{error ? 'CONTROL PLANE UNAVAILABLE' : 'ESTABLISHING TRUST CHANNEL'}</strong>
-      <span>{error ?? 'Reading authoritative manifests…'}</span>
+      <h1>{error ? 'CONTROL PLANE UNAVAILABLE' : 'ESTABLISHING TRUST CHANNEL'}</h1>
+      <p className="loading-message" role="status" aria-live="polite" aria-atomic="true">
+        {error ? '' : 'Reading authoritative manifests…'}
+      </p>
+      <p className="loading-message" role="alert" aria-live="assertive" aria-atomic="true">
+        {error ?? ''}
+      </p>
       {error && <button type="button" className="loading-retry" onClick={onRetry}><RefreshCw size={14} /> Retry secure connection</button>}
     </main>
   )
