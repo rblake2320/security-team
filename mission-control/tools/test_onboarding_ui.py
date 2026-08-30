@@ -38,7 +38,14 @@ def wait_for_health(base_url: str) -> None:
 
 
 def assert_html_transform_is_disabled(base_url: str) -> None:
-    with urllib.request.urlopen(base_url, timeout=10) as response:
+    request = urllib.request.Request(
+        base_url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=10) as response:
         cache_control = response.headers.get("Cache-Control", "")
         assert "no-transform" in cache_control, (
             f"HTML must prevent edge script injection: Cache-Control={cache_control!r}"
