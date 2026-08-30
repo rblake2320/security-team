@@ -743,7 +743,10 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-cache" if candidate.name == "index.html" else "public, max-age=31536000, immutable")
+        self.send_header(
+            "Cache-Control",
+            "no-cache, no-transform" if candidate.name == "index.html" else "public, max-age=31536000, immutable",
+        )
         self._security_headers()
         self.end_headers()
         self.wfile.write(body)

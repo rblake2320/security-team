@@ -37,6 +37,14 @@ def wait_for_health(base_url: str) -> None:
     raise RuntimeError(f"Demo server did not become healthy at {base_url}")
 
 
+def assert_html_transform_is_disabled(base_url: str) -> None:
+    with urllib.request.urlopen(base_url, timeout=10) as response:
+        cache_control = response.headers.get("Cache-Control", "")
+        assert "no-transform" in cache_control, (
+            f"HTML must prevent edge script injection: Cache-Control={cache_control!r}"
+        )
+
+
 def assert_no_horizontal_clip(page, label: str) -> None:
     metrics = page.evaluate(
         """() => ({
@@ -330,6 +338,7 @@ def main() -> int:
     try:
         if configured_url:
             base_url = configured_url.rstrip("/") + "/"
+            assert_html_transform_is_disabled(base_url)
             run_browser_checks(base_url)
         else:
             port = free_port()
@@ -349,6 +358,7 @@ def main() -> int:
             )
             servers.append(server)
             wait_for_health(base_url)
+            assert_html_transform_is_disabled(base_url)
             run_browser_checks(base_url)
             server.terminate()
             server.wait(timeout=5)
@@ -381,6 +391,7 @@ def main() -> int:
             )
             servers.append(tenant_server)
             wait_for_health(tenant_url)
+            assert_html_transform_is_disabled(tenant_url)
             run_tenant_engagement_checks(tenant_url)
     finally:
         for server in servers:

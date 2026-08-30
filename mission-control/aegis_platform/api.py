@@ -212,6 +212,8 @@ def create_app(settings: Settings | None = None, *, create_schema: bool = True) 
         response.headers["Server-Timing"] = f"app;dur={(time.monotonic() - started) * 1000:.1f}"
         if request.url.path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
+        elif response.headers.get("content-type", "").lower().startswith("text/html"):
+            response.headers["Cache-Control"] = "no-cache, no-transform"
         return response
 
     @app.exception_handler(AuthenticationError)
