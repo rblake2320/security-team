@@ -46,7 +46,7 @@ The hosted product does not connect inward to a customer's network. A customer p
 | Connector to ingestion API | stolen token, replay, excessive data | one-time hashed token, revocation, scoped capabilities, idempotency keys, body/batch bounds, pseudonymization |
 | Control plane to connector | tool abuse, unintended blast radius | deny-by-default action catalog, payload scrubbing, dry-run, approval, separation of duties, lease expiry, kill switch |
 | Application to PostgreSQL | injection, tenant leakage, tampering, resource exhaustion | SQLAlchemy parameterization, tenant predicates, dedicated database, statement timeouts, migrations, backup/restore drills |
-| Application to evidence store | malware, path traversal, disclosure, tampering | filename/path normalization, type/size allowlist, quarantine, AES-GCM envelope encryption, SHA-256, legal holds |
+| Application to evidence store | malware, path traversal, disclosure, tampering | filename/path normalization, type/size allowlist, fail-closed private ClamAV scan, quarantine, AES-GCM envelope encryption, SHA-256, legal holds |
 | AI observation to policy engine | surveillance overcollection, prompt leakage, evasion | no prompt/response fields, user/device HMAC pseudonyms, domain normalization, model/tool/MCP inventory, explicit unknown state |
 | Build to runtime | dependency or image compromise | pinned lockfile, dependency audit, migration check, multi-stage image, non-root/read-only runtime, dropped capabilities |
 
@@ -83,7 +83,7 @@ These cases are owned across the Purple, White, Yellow, Green, Orange, Blue, and
 | R-003 | Stolen connector credential | S/E | high | one-time token, HMAC hash only, scoped capabilities, revocation, Access service policy, audit | medium | rotation workflow, short-lived machine identity option, anomaly rules |
 | R-004 | Unauthorized containment/block action | T/E/D | critical | deny-by-default catalog, successful dry-run, independent approval, scoped connector, lease token/expiry, kill switch | medium | exercise every action-specific rollback and blast-radius limit |
 | R-005 | Prompt or sensitive content retained | I | critical | schemas omit prompts/responses, policy rejects prompt retention, payload secret scrubbing, metadata-only AI usage | low | DLP regression corpus and log/evidence content scans |
-| R-006 | Evidence theft or replacement | T/I/R | critical | tenant-derived AES-GCM envelope, plaintext SHA-256, quarantine, atomic write, chain audit, retention/legal hold | medium | external malware scanner, off-host immutable backup, key rotation/HSM design |
+| R-006 | Evidence theft, malware, or replacement | T/I/R | critical | tenant-derived AES-GCM envelope, plaintext SHA-256, automatic private ClamAV verdict, fail-closed quarantine, atomic write, chain audit, retention/legal hold | medium | off-host immutable backup, key rotation/HSM design, advanced detonation sandbox for high-risk formats |
 | R-007 | Audit-chain deletion or database-admin tampering | T/R | high | per-tenant chained hashes and verifier | medium | export signed checkpoints to separate immutable storage |
 | R-008 | Supply-chain compromise | T/E | critical | lockfile, dependency audits, migration checks, minimal non-root container, read-only filesystem | medium | signed images/SBOM/provenance and admission verification in CI/CD |
 | R-009 | Cloudflare/identity misconfiguration | S/E | high | production config fails closed, audience/issuer validation, Trusted Host, tunnel-only origin | medium | staged negative identity tests and policy export review before DNS cutover |
@@ -100,6 +100,7 @@ A release is blocked unless all of the following have evidence:
 - The showcase image has no production environment file, database volume, connector route, owner record, or control path.
 - Cloudflare Access allows an invited human, denies an uninvited human, accepts only the dedicated connector service policy, and denies direct origin access.
 - Database and evidence backup completes, checksums validate, and an isolated restore drill succeeds.
+- The real digest-pinned ClamAV engine accepts clean evidence, rejects EICAR, and scanner outage tests preserve quarantine and fail readiness.
 - Dependency, container, secret, and source scans meet the project's fail threshold.
 - Security headers, request/body bounds, error behavior, responsive UI, keyboard operation, and reduced motion are verified.
 - Every enabled critical control is either verified or explicitly excepted with an owner and expiry; unknown is never silently accepted.
@@ -107,7 +108,7 @@ A release is blocked unless all of the following have evidence:
 ## Known residual work before regulated or large-enterprise claims
 
 - Database-enforced row security and externally managed per-tenant keys are not yet implemented.
-- Evidence malware scanning is represented by a quarantine/scan decision workflow; a production scanner must be connected.
+- ClamAV provides a real signature-based malware gate; advanced detonation, archive recursion policy tuning, and a multi-engine service remain risk-based enhancements for hostile high-risk formats.
 - Billing, contractual compliance mappings, regional data residency, legal terms, support operations, and breach notification processes require business decisions outside this codebase.
 - High availability, multi-region recovery, independent penetration testing, and formal SOC 2/ISO certification have not been proven.
 

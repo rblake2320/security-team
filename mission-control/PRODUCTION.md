@@ -4,7 +4,7 @@
 
 Use both Hostinger and Cloudflare, with different jobs:
 
-- **Hostinger VPS:** runs the application container, dedicated PostgreSQL, encrypted evidence volume, and backup job.
+- **Hostinger VPS:** runs the application container, dedicated PostgreSQL, private ClamAV evidence scanner, encrypted evidence volume, and backup job.
 - **Cloudflare:** owns DNS, TLS, Access identity/service policies, rate limits, and the outbound Tunnel. No inbound VPS application or database port is opened publicly.
 - **This Windows machine:** keeps the private owner console and owner data. Do not point a public tunnel at its operator port.
 
@@ -41,6 +41,12 @@ The evidence key must be 32 random bytes encoded with URL-safe base64. Store an 
 
 `DATABASE_URL` must contain the URL-encoded database password. The database service has no published port and is reachable only on the internal Compose network.
 
+Production must set `EVIDENCE_SCANNER_MODE=clamav` and `CLAMAV_HOST=clamav`. The
+scanner has no published port, is reachable only on the internal Compose network,
+and stores signatures in its dedicated volume. The application refuses production
+startup without this mode and reports not-ready whenever ClamAV cannot return a
+trusted verdict.
+
 ## 3. Create Cloudflare identity boundaries first
 
 Before creating the public hostname:
@@ -61,7 +67,7 @@ From `mission-control/deploy/vps`:
 ```bash
 docker compose --env-file .env.production -f compose.production.yml config
 docker compose --env-file .env.production -f compose.production.yml build --pull
-docker compose --env-file .env.production -f compose.production.yml up -d db app
+docker compose --env-file .env.production -f compose.production.yml up -d db clamav app
 curl --fail http://127.0.0.1:8780/api/health
 curl --fail http://127.0.0.1:8780/api/ready
 docker compose --env-file .env.production -f compose.production.yml up -d tunnel
@@ -77,6 +83,8 @@ Verify these negative and positive paths before inviting anyone:
 - connector without the service token denied at Cloudflare;
 - connector with service token but wrong/revoked AEGIS token denied by the application;
 - direct VPS public access unavailable;
+- ClamAV accepts bounded clean content, rejects the EICAR test signature, and an
+  unavailable scanner leaves evidence quarantined while `/api/ready` returns 503;
 - cross-workspace object identifiers denied;
 - critical action denied without successful dry-run and different human approver;
 - kill switch prevents new work and blocks queued/running work.
@@ -130,6 +138,10 @@ npm run build
 
 Also require dependency/container/secret scans, an SBOM, signed image provenance, Cloudflare policy review, backup receipt, recent restore evidence, and responsive/keyboard UI checks. Monitor health, error rates, denied authorization, connector freshness, telemetry gaps, approval age, audit-chain state, evidence-scan backlog, backup age, and open Shadow AI violations.
 
+The CI container job starts the same digest-pinned ClamAV image used in production
+and proves both a clean verdict and EICAR rejection through the application scanner
+client. A human-supplied scan status is not authoritative in production.
+
 ## Demoing the working product
 
 For the challenge recording, use the private owner console locally and show a real allowlisted gate. Do not display secrets, browser tabs, terminals, personal paths, or notification content. Use the customer workspace locally for tenant controls and Shadow AI, populated with clearly labeled synthetic records. Use the public showcase URL only for audience follow-up.
@@ -139,9 +151,9 @@ The strongest one-minute proof is:
 1. seven-team coverage identifies a real telemetry gap;
 2. Shadow AI inventory creates a sensitive-data violation without storing a prompt;
 3. a critical block action fails without dry-run/independent approval;
-4. evidence lands quarantined and encrypted;
+4. evidence is encrypted, scanned by ClamAV, and either released or kept quarantined;
 5. the audit-chain verifier detects tampering.
 
 ## Honest production boundary
 
-This build supplies a strong single-region beta platform, not a certification or perfect-security claim. Database-enforced row security, externally managed per-tenant keys, integrated malware scanning, multi-region high availability, signed audit checkpoints, billing, contractual compliance mappings, independent penetration testing, and formal certifications remain explicit release-scope work for regulated or large-enterprise use. See `docs/THREAT_MODEL.md`.
+This build supplies a strong single-region beta platform, not a certification or perfect-security claim. Database-enforced row security, externally managed per-tenant keys, advanced detonation/sandbox analysis, multi-region high availability, signed audit checkpoints, billing, contractual compliance mappings, independent penetration testing, and formal certifications remain explicit release-scope work for regulated or large-enterprise use. See `docs/THREAT_MODEL.md`.

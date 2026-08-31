@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import base64
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,6 +35,10 @@ class Settings:
     max_evidence_bytes: int = 10 * 1024 * 1024
     lease_seconds: int = 120
     session_cookie_name: str = "aegis_session"
+    evidence_scanner_mode: str = "disabled"
+    clamav_host: str = "127.0.0.1"
+    clamav_port: int = 3310
+    clamav_timeout_seconds: int = 30
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -59,6 +64,10 @@ class Settings:
             max_evidence_bytes=_integer("MAX_EVIDENCE_BYTES", 10 * 1024 * 1024),
             lease_seconds=_integer("TASK_LEASE_SECONDS", 120),
             session_cookie_name=os.getenv("SESSION_COOKIE_NAME", "aegis_session").strip(),
+            evidence_scanner_mode=os.getenv("EVIDENCE_SCANNER_MODE", "disabled").strip().lower(),
+            clamav_host=os.getenv("CLAMAV_HOST", "127.0.0.1").strip().lower(),
+            clamav_port=_integer("CLAMAV_PORT", 3310),
+            clamav_timeout_seconds=_integer("CLAMAV_TIMEOUT_SECONDS", 30),
         )
         settings.validate()
         return settings
@@ -74,6 +83,14 @@ class Settings:
             raise RuntimeError("MAX_EVIDENCE_BYTES must be between 1 KiB and 100 MiB")
         if self.lease_seconds < 30 or self.lease_seconds > 3600:
             raise RuntimeError("TASK_LEASE_SECONDS must be between 30 and 3600")
+        if self.evidence_scanner_mode not in {"disabled", "clamav"}:
+            raise RuntimeError("EVIDENCE_SCANNER_MODE must be disabled or clamav")
+        if not re.fullmatch(r"[a-z0-9.-]{1,253}", self.clamav_host):
+            raise RuntimeError("CLAMAV_HOST must be a hostname or IP address")
+        if self.clamav_port < 1 or self.clamav_port > 65535:
+            raise RuntimeError("CLAMAV_PORT must be between 1 and 65535")
+        if self.clamav_timeout_seconds < 1 or self.clamav_timeout_seconds > 300:
+            raise RuntimeError("CLAMAV_TIMEOUT_SECONDS must be between 1 and 300")
         if self.environment == "production":
             failures: list[str] = []
             if not self.database_url.startswith(("postgresql://", "postgresql+psycopg://")):
@@ -95,5 +112,7 @@ class Settings:
                 failures.append("EVIDENCE_MASTER_KEY must be a URL-safe base64-encoded 32-byte key")
             if self.bootstrap_email.endswith("@example.test"):
                 failures.append("BOOTSTRAP_EMAIL must name the initial production owner")
+            if self.evidence_scanner_mode != "clamav":
+                failures.append("EVIDENCE_SCANNER_MODE must be clamav in production")
             if failures:
                 raise RuntimeError("Unsafe production configuration: " + "; ".join(failures))

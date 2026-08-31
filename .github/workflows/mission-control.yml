@@ -106,6 +106,27 @@ jobs:
       - name: Validate release automation
         run: bash -n mission-control/deploy/vps/release.sh
 
+      - name: Verify real ClamAV evidence scanning
+        shell: bash
+        run: |
+          set -euo pipefail
+          container_id="$(docker run --detach --rm --publish 127.0.0.1:3311:3310 clamav/clamav:stable@sha256:f0954d679017eb6d48221e2b2be3ac5457bf278a844f39b672376f55a085f591)"
+          trap 'docker stop "$container_id" >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 1 90); do
+            health="$(docker inspect --format '{{.State.Health.Status}}' "$container_id")"
+            if [ "$health" = healthy ]; then
+              PYTHONPATH=mission-control CLAMAV_HOST=127.0.0.1 CLAMAV_PORT=3311 python mission-control/tools/verify_clamav.py
+              exit 0
+            fi
+            if [ "$(docker inspect --format '{{.State.Running}}' "$container_id")" != true ]; then
+              docker logs "$container_id"
+              exit 1
+            fi
+            sleep 2
+          done
+          docker logs "$container_id"
+          exit 1
+
       - name: Build production image
         run: docker build --pull --tag aegis-mission-control:ci ./mission-control
 

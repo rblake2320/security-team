@@ -35,6 +35,22 @@ class ProductionReleaseContractTests(unittest.TestCase):
             for image in third_party:
                 self.assertRegex(image, r"@sha256:[0-9a-f]{64}$")
 
+    def test_production_release_is_gated_on_real_evidence_scanner(self) -> None:
+        compose = (MISSION_ROOT / "deploy" / "vps" / "compose.production.yml").read_text(encoding="utf-8")
+        release = (MISSION_ROOT / "deploy" / "vps" / "release.sh").read_text(encoding="utf-8")
+        production_env = (MISSION_ROOT / "deploy" / "vps" / ".env.production.example").read_text(encoding="utf-8")
+        workflow = (MISSION_ROOT.parent / ".github" / "workflows" / "mission-control.yml").read_text(encoding="utf-8")
+        self.assertRegex(compose, r"image: clamav/clamav:[^\s]+@sha256:[0-9a-f]{64}")
+        self.assertIn("clamav-signatures:/var/lib/clamav", compose)
+        self.assertIn("condition: service_healthy", compose)
+        clamav_section = compose.split("\n  clamav:", 1)[1].split("\n  app:", 1)[0]
+        self.assertNotIn("\n    ports:", clamav_section)
+        self.assertIn("up --detach clamav", release)
+        self.assertIn("wait_healthy compose.production.yml .env.production clamav 210", release)
+        self.assertIn("EVIDENCE_SCANNER_MODE=clamav", production_env)
+        self.assertIn("python mission-control/tools/verify_clamav.py", workflow)
+        self.assertRegex(workflow, r"clamav/clamav:[^\s]+@sha256:[0-9a-f]{64}")
+
 
 if __name__ == "__main__":
     unittest.main()

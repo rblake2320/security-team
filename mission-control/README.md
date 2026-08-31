@@ -41,11 +41,11 @@ Open `http://127.0.0.1:8780`. Development identity headers work only from loopba
 
 - Tenant workspaces, invited users, roles, programs, authorized engagements, connectors, agents, tasks, approvals, evidence, findings, incidents, retention, and exports.
 - An engagement workspace for owner-site reviews, pre-launch reviews, client-authorized work, and continuous assurance. Each engagement records targets, scope, exclusions, stop conditions, authority, selected teams, evidence, assessment runs, findings, and recommendations.
-- Drag-and-drop media intake for documents, images, audio, video, code/data, and archives. Files are encrypted immediately, held in quarantine until cleared, and never made public by the showcase.
+- Drag-and-drop media intake for documents, images, audio, video, code/data, and archives. Files are encrypted immediately, scanned by a private fail-closed ClamAV service, held in quarantine until cleared, and never made public by the showcase.
 - Versioned assessment runs with stable finding fingerprints, baseline comparison, introduced/persistent/resolved results, and a portable ZIP containing JSON, CSV registers, audit records, and a human-readable manifest.
 - One-time connector credentials stored only as HMAC digests, explicit observation/action capabilities, revocation, heartbeat, idempotent event ingestion, and bounded payloads.
 - Deny-by-default action catalog with risk levels, human approval, successful dry-runs for critical actions, separation of duties, expiring leases, safety levels, and a kill switch.
-- Quarantined evidence with path/type/size controls, plaintext SHA-256 integrity, per-workspace derived AES-GCM encryption, legal holds, and retention sweeps.
+- Quarantined evidence with path/type/size controls, real malware verdicts, plaintext SHA-256 integrity, per-workspace derived AES-GCM encryption, legal holds, and retention sweeps.
 - Per-tenant hash-chained audit records with a verifier.
 - Alembic schema migrations, production configuration validation, database timeouts, secure response headers, strict host validation, non-root read-only containers, and health/readiness probes.
 - A 50+ control security-coverage baseline spanning identity, endpoint, network, cloud, SaaS, application/API, data, vulnerability, supply chain, privacy, third party, resilience, incident response, and adversarial validation.
@@ -80,7 +80,7 @@ For a stable public showcase, use `deploy/vps/compose.showcase.yml` with its own
 
 Open **Engagements**, choose a template, and record the target, environment, objective, scope, exclusions, stop conditions, and authorization. Add only targets the customer owns or has explicitly authorized. Select the security teams that should participate, then create the workspace.
 
-Drop supporting files into the engagement. AEGIS encrypts each file and holds it in quarantine until the evidence scan marks it clean. Clean files can be downloaded by an authorized human or analyzed by a leased, capability-scoped connector. Raw uploaded files are deliberately excluded from engagement exports.
+Drop supporting files into the engagement. AEGIS encrypts each file and sends its bounded plaintext stream over the private internal network to ClamAV. Only the engine's clean verdict releases it; malware or scanner failure keeps it blocked. Clean files can be downloaded by an authorized human or analyzed by a leased, capability-scoped connector. Raw uploaded files are deliberately excluded from engagement exports.
 
 To assess a live site, API, repository, cloud environment, or supplied artifact, provision a customer-owned connector with the narrow `assessment.execute` capability. Launching creates a high-risk task that must receive human approval before a connector can lease it. Without that connector and approval, AEGIS reports the missing prerequisite and does not claim an assessment ran.
 

@@ -73,6 +73,13 @@ from .schemas import (
     ViolationDecision,
 )
 from .security import AccessVerifier, AuthenticationError, scrub, secret_matches
+from .scanner import (
+    ClamAVScanner,
+    DisabledEvidenceScanner,
+    ScanResult,
+    ScannerUnavailable,
+    build_evidence_scanner,
+)
 from .service import (
     RequestContext,
     accept_invitation,
@@ -150,7 +157,12 @@ def problem(status: int, title: str, detail: str, request_id: str = "") -> JSONR
     )
 
 
-def create_app(settings: Settings | None = None, *, create_schema: bool = True) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    create_schema: bool = True,
+    evidence_scanner: DisabledEvidenceScanner | ClamAVScanner | None = None,
+) -> FastAPI:
     settings = settings or Settings.from_env()
     database = Database(settings)
     if create_schema and settings.environment != "production":
@@ -158,6 +170,12 @@ def create_app(settings: Settings | None = None, *, create_schema: bool = True) 
     database.bootstrap()
     verifier = AccessVerifier(settings)
     evidence_store = EvidenceStore(settings.evidence_root, settings.max_evidence_bytes, settings.evidence_master_key)
+    scanner = evidence_scanner or build_evidence_scanner(
+        settings.evidence_scanner_mode,
+        host=settings.clamav_host,
+        port=settings.clamav_port,
+        timeout_seconds=settings.clamav_timeout_seconds,
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -176,6 +194,7 @@ def create_app(settings: Settings | None = None, *, create_schema: bool = True) 
     app.state.settings = settings
     app.state.database = database
     app.state.evidence_store = evidence_store
+    app.state.evidence_scanner = scanner
     if settings.environment == "production":
         app.add_middleware(
             TrustedHostMiddleware,
@@ -270,6 +289,48 @@ def create_app(settings: Settings | None = None, *, create_schema: bool = True) 
         if parsed.scheme not in {"http", "https"} or parsed.netloc.lower() != request.headers.get("host", "").lower():
             raise PermissionError("cross-origin control requests are forbidden")
 
+    def apply_evidence_scan(
+        session: Session,
+        row: Evidence,
+        content: bytes,
+        *,
+        actor: str,
+        note: str,
+    ) -> ScanResult | None:
+        if not scanner.enabled:
+            return None
+        try:
+            result = scanner.scan_bytes(content)
+        except ScannerUnavailable:
+            row.scan_status = "quarantined"
+            append_audit(
+                session,
+                row.organization_id,
+                actor=actor,
+                action="evidence.scan.unavailable",
+                target_type="evidence",
+                target_id=row.id,
+                detail={"sha256": row.sha256, "engine": scanner.mode},
+            )
+            LOG.warning("Evidence scanner unavailable; evidence_id=%s remains quarantined", row.id)
+            return None
+        row.scan_status = result.status
+        append_audit(
+            session,
+            row.organization_id,
+            actor=actor,
+            action=f"evidence.scan.{result.status}",
+            target_type="evidence",
+            target_id=row.id,
+            detail={
+                "sha256": row.sha256,
+                "engine": result.engine,
+                "signature": result.signature,
+                "note": scrub(note),
+            },
+        )
+        return result
+
     @app.get("/api/health")
     def health(session: Session = Depends(get_session)) -> dict[str, Any]:
         session.execute(text("SELECT 1"))
@@ -288,7 +349,14 @@ def create_app(settings: Settings | None = None, *, create_schema: bool = True) 
         writable = settings.evidence_root.exists() and settings.evidence_root.is_dir()
         if not writable:
             raise HTTPException(status_code=503, detail="evidence store unavailable")
-        return {"status": "ready", "database": "ok", "evidenceStore": "ok"}
+        if scanner.enabled and not scanner.ping():
+            raise HTTPException(status_code=503, detail="evidence scanner unavailable")
+        return {
+            "status": "ready",
+            "database": "ok",
+            "evidenceStore": "ok",
+            "evidenceScanner": scanner.mode if scanner.enabled else "not-required",
+        }
 
     @app.get("/api/v1/me")
     def me(ctx: RequestContext = Depends(request_context)) -> dict[str, Any]:
@@ -989,6 +1057,13 @@ def create_app(settings: Settings | None = None, *, create_schema: bool = True) 
             task_id=task_id,
             classification=classification[:48],
         )
+        apply_evidence_scan(
+            session,
+            row,
+            content,
+            actor="scanner:clamav",
+            note="Automatic evidence-ingress scan.",
+        )
         asset = None
         if engagement:
             kind = media_kind(row.content_type, row.filename)
@@ -998,7 +1073,11 @@ def create_app(settings: Settings | None = None, *, create_schema: bool = True) 
                 assessment_run_id=assessment_run.id if assessment_run else None,
                 evidence_id=row.id,
                 media_kind=kind,
-                analysis_status="quarantined",
+                analysis_status=(
+                    "ready" if row.scan_status == "clean"
+                    else "rejected" if row.scan_status == "rejected"
+                    else "quarantined"
+                ),
                 suggestions=asset_suggestions(kind),
             )
             session.add(asset)
@@ -1076,7 +1155,19 @@ def create_app(settings: Settings | None = None, *, create_schema: bool = True) 
         )
         if not row:
             raise ValueError("evidence not found")
-        row.scan_status = body.status
+        scanner_result = None
+        if scanner.enabled:
+            scanner_result = apply_evidence_scan(
+                session,
+                row,
+                evidence_store.get(ctx.organization.id, row.storage_key),
+                actor="scanner:clamav",
+                note=body.note,
+            )
+            if scanner_result is None:
+                raise HTTPException(status_code=503, detail="evidence scanner unavailable")
+        else:
+            row.scan_status = body.status
         asset = session.scalar(
             select(EngagementAsset).where(
                 EngagementAsset.evidence_id == row.id,
@@ -1084,17 +1175,22 @@ def create_app(settings: Settings | None = None, *, create_schema: bool = True) 
             )
         )
         if asset:
-            asset.analysis_status = "ready" if body.status == "clean" else "rejected"
-        append_audit(
-            session,
-            ctx.organization.id,
-            actor=ctx.actor,
-            action=f"evidence.scan.{body.status}",
-            target_type="evidence",
-            target_id=row.id,
-            detail={"note": body.note, "sha256": row.sha256},
-        )
-        return {"id": row.id, "scanStatus": row.scan_status}
+            asset.analysis_status = "ready" if row.scan_status == "clean" else "rejected"
+        if not scanner.enabled:
+            append_audit(
+                session,
+                ctx.organization.id,
+                actor=ctx.actor,
+                action=f"evidence.scan.{body.status}",
+                target_type="evidence",
+                target_id=row.id,
+                detail={"note": body.note, "sha256": row.sha256, "engine": "manual-development"},
+            )
+        return {
+            "id": row.id,
+            "scanStatus": row.scan_status,
+            "scanner": scanner_result.engine if scanner_result else "manual-development",
+        }
 
     @app.get("/api/v1/evidence/{evidence_id}/download")
     def download_evidence(

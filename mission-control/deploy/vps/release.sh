@@ -76,8 +76,9 @@ wait_healthy() {
   compose_file="$1"
   env_file="$2"
   service="$3"
+  max_attempts="${4:-60}"
   attempt=0
-  while [ "$attempt" -lt 60 ]; do
+  while [ "$attempt" -lt "$max_attempts" ]; do
     container_id="$(docker compose --env-file "$env_file" -f "$compose_file" ps --quiet "$service")"
     health="$(docker inspect --format '{{.State.Health.Status}}' "$container_id" 2>/dev/null || true)"
     [ "$health" = healthy ] && return 0
@@ -101,6 +102,11 @@ docker compose --env-file .env.production -f compose.production.yml config --qui
 docker compose --env-file .env.showcase -f compose.showcase.yml config --quiet
 AEGIS_IMAGE_TAG="$release_tag" AEGIS_COMMIT="$release_commit" docker compose --env-file .env.production -f compose.production.yml build --pull app
 AEGIS_IMAGE_TAG="$release_tag" AEGIS_COMMIT="$release_commit" docker compose --env-file .env.showcase -f compose.showcase.yml build --pull showcase
+
+# Warm the private malware scanner before switching releases. The bounded
+# seven-minute allowance covers first-run signature initialization.
+docker compose --env-file .env.production -f compose.production.yml up --detach clamav
+wait_healthy compose.production.yml .env.production clamav 210
 
 switched=1
 ln -sfn "$release" /opt/aegis/current.next
@@ -135,6 +141,7 @@ revision_after="$(docker compose --env-file .env.production -f compose.productio
 
 switched=0
 printf 'PRODUCTION_APP=HEALTHY\n'
+printf 'EVIDENCE_SCANNER=HEALTHY\n'
 printf 'PUBLIC_SHOWCASE=HEALTHY\n'
 printf 'OPERATOR_PROFILE=PASS\n'
 printf 'SHOWCASE_PROFILE=PASS\n'
