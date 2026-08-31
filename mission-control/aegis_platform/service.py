@@ -495,7 +495,9 @@ def connector_heartbeat(
     connector.status = "online"
     connector.version = version[:32]
     if capabilities:
-        connector.capabilities = sorted(set(capabilities) & CONNECTOR_CAPABILITIES)
+        # A heartbeat can report fewer installed capabilities but can never
+        # grant itself a capability that the human did not provision.
+        connector.capabilities = sorted(set(capabilities) & set(connector.capabilities) & CONNECTOR_CAPABILITIES)
     rows: list[Agent] = []
     for report in agents:
         row = session.scalar(
@@ -515,7 +517,7 @@ def connector_heartbeat(
         row.name = report["name"]
         row.kind = report["kind"]
         row.status = report["status"]
-        row.capabilities = report["capabilities"]
+        row.capabilities = sorted(set(report["capabilities"]) & set(connector.capabilities))
         row.metadata_json = scrub(report["metadata"])
         row.last_seen_at = now
         rows.append(row)
@@ -618,6 +620,38 @@ def lease_task(session: Session, connector: Connector, settings: Settings) -> tu
         detail={"connector_id": connector.id, "locked_until": iso(task.locked_until)},
     )
     return task, lease_token
+
+
+def renew_task_lease(
+    session: Session,
+    connector: Connector,
+    task_id: str,
+    lease_token: str,
+    settings: Settings,
+) -> Task:
+    task = session.scalar(
+        select(Task).where(
+            Task.id == task_id,
+            Task.organization_id == connector.organization_id,
+            Task.connector_id == connector.id,
+            Task.status == "running",
+        ).with_for_update()
+    )
+    if not task or not task.lease_token_hash:
+        raise PermissionError("an active task lease is required")
+    if not secret_matches(lease_token, task.lease_token_hash, settings.token_pepper):
+        raise PermissionError("task lease token is invalid")
+    now = utcnow()
+    locked_until = task.locked_until
+    if locked_until and locked_until.tzinfo is None:
+        locked_until = locked_until.replace(tzinfo=timezone.utc)
+    if not locked_until or locked_until <= now:
+        raise PermissionError("task lease expired and failed closed")
+    organization = session.get(Organization, connector.organization_id)
+    if not organization or organization.kill_switch_active or organization.safety_level in {"restricted", "halted"}:
+        raise PermissionError("workspace safety controls prohibit lease renewal")
+    task.locked_until = now + timedelta(seconds=settings.lease_seconds)
+    return task
 
 
 def complete_task(

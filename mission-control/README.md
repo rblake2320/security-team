@@ -12,6 +12,32 @@ It has three deliberately separate product surfaces:
 
 There is no supported path from the showcase or a customer workspace into the owner's local records. The hosted product keeps authorization, policy, evidence handling, tenant filtering, and execution logic on the server; the browser receives the compiled interface and authorized API responses.
 
+## Run the functioning local product
+
+The Markdown files describe the operating model; they are not the runtime. The functioning product is the hosted-style Mission Control API/UI plus the included customer-edge connector that consumes approved work and executes it against an explicitly allowlisted folder or hostname.
+
+From `C:\Users\techai\security-team`:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\mission-control\launch-product.ps1
+```
+
+That one command opens `http://127.0.0.1:8790/#/engagements`, starts the durable local platform, provisions an ephemeral least-privilege connector, and starts seven visible team workers against only `C:\Users\techai\security-team`. The credential remains process-only and is revoked when the launcher stops.
+
+To authorize a web target at the connector boundary as well as in the engagement:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\mission-control\launch-product.ps1 -AllowedHost staging.example.com,api.staging.example.com
+```
+
+Inside the product: create an engagement, choose **Repository**, enter the exact authorized folder, record the authority and stop conditions, then queue the assessment. Mission Control opens the approval queue; after approval, the connector leases the work, runs the seven-team inspection, returns stable findings and recommendations, and makes the result available for comparison and ZIP export. A configured-but-offline connector is shown as offline and cannot make the assessment button appear ready.
+
+### Model-independence contract
+
+AEGIS does not require a frontier model to complete its core workflow. With every model API unavailable, the application still persists workspace and engagement state, enforces identity and approvals, leases tasks, inspects allowlisted repositories and HTTP targets, analyzes bounded evidence, runs declared engineering gates, records seven-team results and stable finding fingerprints, compares runs, exports evidence, and verifies the audit chain. The connector uses only the Python standard library and the local tools explicitly invoked by an approved gate.
+
+Future model integrations are optional advisory capabilities. They must use a separately scoped connector capability, identify their provider and model in the audit record, treat retrieved content as untrusted data, and never replace deterministic authorization, evidence, scoring overrides, task state, or audit decisions. Removing an advisory model must reduce enrichment only; it must not stop the product.
+
 ## Private owner console
 
 From `C:\Users\techai\security-team`:
@@ -50,6 +76,23 @@ Open `http://127.0.0.1:8780`. Development identity headers work only from loopba
 - Per-tenant hash-chained audit records with a verifier.
 - Alembic schema migrations, production configuration validation, database timeouts, secure response headers, strict host validation, non-root read-only containers, and health/readiness probes.
 - A 50+ control security-coverage baseline spanning identity, endpoint, network, cloud, SaaS, application/API, data, vulnerability, supply chain, privacy, third party, resilience, incident response, and adversarial validation.
+- A shipped, model-independent customer-edge execution connector (`python -m aegis_connector`) with independent local path/hostname allowlists, outbound-only task leasing, renewable leases, seven-team repository review, passive web/API checks, bounded evidence analysis, result ingestion, heartbeat visibility, and explicit failure for unsupported target types.
+
+## Customer-edge connector
+
+Provision a connector credential in **Workspace Controls**, granting only the required capabilities. Put the credential in the operating-system secret manager or a mounted secret file, configure the exact local roots and hosts, and prove the connection before starting the service:
+
+```powershell
+$env:AEGIS_API_URL = "https://mission.example.com"
+$env:AEGIS_CONNECTOR_TOKEN_FILE = "C:\secure\aegis_connector_token"
+$env:AEGIS_PROGRAM_ROOT = "C:\authorized\security-team"
+$env:AEGIS_ALLOWED_ROOTS = "C:\authorized\customer-repository"
+$env:AEGIS_ALLOWED_HOSTS = "staging.example.com,api.staging.example.com"
+python -m aegis_connector --doctor
+python -m aegis_connector
+```
+
+For container deployment, use `Dockerfile.connector` and `deploy/connector/compose.example.yml`. The connector container runs without root, drops Linux capabilities, uses a read-only filesystem, mounts the authorized workspace read-only, accepts secrets through mounted files, and exposes no inbound port.
 
 ## Shadow AI defense
 

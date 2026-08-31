@@ -785,8 +785,9 @@ function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUplo
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; message: string } | null>(null)
   const [comparison, setComparison] = useState<RunComparison | null>(null)
   const active = engagements.find((engagement) => engagement.id === selectedId) ?? engagements[0]
-  const executor = snapshot.platform?.connectors.find((connector) => connector.capabilities.includes('assessment.execute'))
-  const analyzer = snapshot.platform?.connectors.find((connector) => connector.capabilities.includes('evidence.analyze'))
+  const configuredExecutor = snapshot.platform?.connectors.find((connector) => connector.capabilities.includes('assessment.execute'))
+  const executor = snapshot.platform?.connectors.find((connector) => connector.status === 'online' && connector.capabilities.includes('assessment.execute'))
+  const analyzer = snapshot.platform?.connectors.find((connector) => connector.status === 'online' && connector.capabilities.includes('evidence.analyze'))
 
   useEffect(() => {
     if (!active && engagements[0]) setSelectedId(engagements[0].id)
@@ -810,7 +811,10 @@ function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUplo
     setNotice(null)
     const baseline = active.runs.find((run) => run.status === 'completed')?.id
     void onLaunch(active.id, mode, executor.id, baseline)
-      .then(() => setNotice({ tone: 'ok', message: 'Assessment work order created. Human approval is required before the connector can execute it.' }))
+      .then(() => {
+        setNotice({ tone: 'ok', message: 'Assessment work order created. Opening the approval queue now; the online worker starts automatically after approval.' })
+        onOpenWorkspace?.()
+      })
       .catch((reason: unknown) => setNotice({ tone: 'error', message: reason instanceof Error ? reason.message : 'Launch failed' }))
       .finally(() => setBusy(null))
   }
@@ -876,7 +880,7 @@ function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUplo
                 <div className="panel-heading"><div><span>EXECUTION CONTRACT</span><h2>Seven-team work order</h2></div><Users size={17} /></div>
                 <div className="team-run-strip">{active.selectedTeams.map((team) => <span key={team} className={`team-${team}`}><i />{team.slice(0, 2).toUpperCase()}</span>)}</div>
                 <label><span>Assessment depth</span><select value={mode} onChange={(event) => setMode(event.target.value as 'safe' | 'standard' | 'deep')}><option value="safe">Safe — passive + non-destructive</option><option value="standard">Standard — authorized active validation</option><option value="deep">Deep — expanded tests, still within scope</option></select></label>
-                {executor ? <div className="executor-state is-ready"><Radio size={14} /><span><strong>{executor.name}</strong> allowlisted for assessment.execute</span></div> : <div className="executor-state is-blocked"><AlertTriangle size={14} /><span><strong>Executor required.</strong> Provision a tenant connector with assessment.execute; AEGIS will not pretend work ran without one.</span>{controlsEnabled && <button type="button" onClick={onOpenWorkspace}>Open workspace controls</button>}</div>}
+                {executor ? <div className="executor-state is-ready"><Radio size={14} /><span><strong>{executor.name}</strong> is online and allowlisted for assessment.execute</span></div> : configuredExecutor ? <div className="executor-state is-blocked"><AlertTriangle size={14} /><span><strong>Worker offline.</strong> The credential exists, but no customer-edge process is sending heartbeats. Start the included AEGIS connector on the authorized machine.</span>{controlsEnabled && <button type="button" onClick={onOpenWorkspace}>Open connector setup</button>}</div> : <div className="executor-state is-blocked"><AlertTriangle size={14} /><span><strong>Executor required.</strong> Provision a tenant connector with assessment.execute, then start its worker. AEGIS will not treat configuration as execution.</span>{controlsEnabled && <button type="button" onClick={onOpenWorkspace}>Open connector setup</button>}</div>}
                 <small>Every launch creates one high-risk work order and human approval. Destructive actions remain separately gated.</small>
               </section>
               <section className="panel asset-card">
@@ -1231,6 +1235,15 @@ function ConnectorEditor({ onClose, onProvision }: { onClose: () => void; onProv
           <h2>Copy this credential now.</h2>
           <p>{credential.warning} Mission Control stores only a keyed hash and cannot display it again.</p>
           <code>{credential.token}</code>
+          <div className="connector-runbook">
+            <strong>Start the included worker</strong>
+            <ol>
+              <li>Keep this credential in the machine secret store or process environment.</li>
+              <li>Set the exact authorized folder and, for web assessments, the exact allowed hosts.</li>
+              <li>Run <code>python -m aegis_connector --doctor</code>, then <code>python -m aegis_connector</code>.</li>
+            </ol>
+            <small>For this repository on Windows, <code>mission-control\launch-product.ps1</code> starts the local product and worker together without persisting a connector credential.</small>
+          </div>
           <div className="control-form__lock"><LockKeyhole size={15} /><span>Install this only in the customer-owned connector secret store. Never place it in source code or the public showcase.</span></div>
           <div className="control-form__actions"><button type="button" className="button button--quiet" onClick={() => { void navigator.clipboard.writeText(credential.token).then(() => setCopied(true)) }}>{copied ? 'Copied' : 'Copy credential'}</button><button type="button" className="button button--primary" onClick={onClose}>Done</button></div>
         </div>

@@ -1,0 +1,34 @@
+services:
+  aegis-connector:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.connector
+    restart: unless-stopped
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    environment:
+      AEGIS_API_URL: ${AEGIS_API_URL}
+      AEGIS_CONNECTOR_TOKEN_FILE: /run/secrets/aegis_connector_token
+      CF_ACCESS_CLIENT_ID_FILE: /run/secrets/cf_access_client_id
+      CF_ACCESS_CLIENT_SECRET_FILE: /run/secrets/cf_access_client_secret
+      AEGIS_PROGRAM_ROOT: /workspace
+      AEGIS_ALLOWED_ROOTS: /workspace
+      AEGIS_ALLOWED_HOSTS: ${AEGIS_ALLOWED_HOSTS:-}
+    volumes:
+      - ${AEGIS_AUTHORIZED_ROOT}:/workspace:ro
+    secrets:
+      - aegis_connector_token
+      - cf_access_client_id
+      - cf_access_client_secret
+
+secrets:
+  aegis_connector_token:
+    file: ./secrets/aegis_connector_token
+  cf_access_client_id:
+    file: ./secrets/cf_access_client_id
+  cf_access_client_secret:
+    file: ./secrets/cf_access_client_secret

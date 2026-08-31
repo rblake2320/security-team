@@ -25,6 +25,8 @@ from aegis_platform.models import (
     User,
 )
 from aegis_platform.policies import ROLE_PERMISSIONS
+from aegis_connector.config import ConnectorConfig
+from aegis_connector.worker import ConnectorWorker
 
 
 @pytest.fixture()
@@ -286,6 +288,20 @@ def test_high_risk_task_requires_approval_then_leases_and_completes(app_bundle):
     assert task["status"] == "awaiting_approval"
     assert client.get("/api/v1/connector/tasks/lease", headers={"Authorization": f"Bearer {token}"}).json()["task"] is None
 
+    heartbeat = client.post(
+        "/api/v1/connector/heartbeat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "version": "1.0.0",
+            "capabilities": ["gate.run", "assessment.execute"],
+            "agents": [{"externalId": "worker-1", "name": "Worker", "capabilities": ["gate.run", "assessment.execute"]}],
+        },
+    )
+    assert heartbeat.status_code == 200
+    assert heartbeat.json()["agents"][0]["capabilities"] == ["gate.run"]
+    listed = client.get("/api/v1/connectors").json()["connectors"]
+    assert listed[0]["capabilities"] == ["gate.run"]
+
     approved = client.post(
         f"/api/v1/tasks/{task['id']}/decision",
         json={"decision": "approved", "note": "Reviewed against the bounded gate manifest."},
@@ -293,6 +309,18 @@ def test_high_risk_task_requires_approval_then_leases_and_completes(app_bundle):
     assert approved.status_code == 200
     lease = client.get("/api/v1/connector/tasks/lease", headers={"Authorization": f"Bearer {token}"}).json()
     assert lease["task"]["id"] == task["id"]
+    assert client.post(
+        f"/api/v1/connector/tasks/{task['id']}/renew",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"leaseToken": "aegl_wrong_credential_that_is_long_enough"},
+    ).status_code == 403
+    renewed = client.post(
+        f"/api/v1/connector/tasks/{task['id']}/renew",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"leaseToken": lease["leaseToken"]},
+    )
+    assert renewed.status_code == 200
+    assert renewed.json()["taskId"] == task["id"]
     completed = client.post(
         f"/api/v1/connector/tasks/{task['id']}/complete",
         headers={"Authorization": f"Bearer {token}"},
@@ -522,6 +550,93 @@ def complete_assessment(client: TestClient, token: str, task_id: str, title: str
         },
     )
     assert completed.status_code == 200, completed.text
+
+
+class _TestClientConnectorAPI:
+    def __init__(self, client: TestClient, token: str):
+        self.client = client
+        self.headers = {"Authorization": f"Bearer {token}"}
+
+    def heartbeat(self, agents):  # type: ignore[no-untyped-def]
+        response = self.client.post(
+            "/api/v1/connector/heartbeat",
+            headers=self.headers,
+            json={"version": "1.0.0", "capabilities": ["assessment.execute", "evidence.analyze", "gate.run"], "agents": agents},
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def lease(self):  # type: ignore[no-untyped-def]
+        response = self.client.get("/api/v1/connector/tasks/lease", headers=self.headers)
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    def complete(self, task_id, lease_token, **payload):  # type: ignore[no-untyped-def]
+        response = self.client.post(
+            f"/api/v1/connector/tasks/{task_id}/complete",
+            headers=self.headers,
+            json={"leaseToken": lease_token, **payload},
+        )
+        assert response.status_code == 200, response.text
+        return response.json()
+
+
+def test_real_connector_executes_authorized_repository_engagement_end_to_end(app_bundle, tmp_path: Path):
+    client, _app, _settings = app_bundle
+    repository = tmp_path / "authorized-product"
+    repository.mkdir()
+    (repository / ".gitignore").write_text(".env\n", encoding="utf-8")
+    (repository / "SECURITY.md").write_text("# Report security issues\n", encoding="utf-8")
+    (repository / "package.json").write_text('{"name":"authorized-product"}', encoding="utf-8")
+    (repository / "index.ts").write_text("export const ready = true\n", encoding="utf-8")
+
+    connector, token = provision(client, ["assessment.execute", "evidence.analyze", "gate.run"])
+    payload = engagement_payload() | {
+        "name": "Authorized repository product review",
+        "targets": [
+            {
+                "kind": "repository",
+                "displayName": "Authorized product source",
+                "locator": str(repository),
+                "environment": "development",
+            }
+        ],
+    }
+    created = client.post("/api/v1/engagements", json=payload)
+    assert created.status_code == 201, created.text
+    engagement_id = created.json()["engagement"]["id"]
+    launched = client.post(
+        f"/api/v1/engagements/{engagement_id}/launch",
+        json={"mode": "safe", "connectorId": connector["id"]},
+    )
+    assert launched.status_code == 202, launched.text
+    task_id = launched.json()["task"]["id"]
+    assert client.post(
+        f"/api/v1/tasks/{task_id}/decision",
+        json={"decision": "approved", "note": "Repository owner approved this bounded local assessment."},
+    ).status_code == 200
+
+    config = ConnectorConfig(
+        api_url="http://127.0.0.1:8780",
+        token=token,
+        program_root=repository,
+        allowed_roots=(repository,),
+        allowed_hosts=(),
+    )
+    worker = ConnectorWorker(config, api=_TestClientConnectorAPI(client, token))  # type: ignore[arg-type]
+    assert worker.run_once() is True
+
+    detail = client.get(f"/api/v1/engagements/{engagement_id}").json()["engagement"]
+    assert detail["status"] == "review"
+    assert detail["runs"][0]["status"] == "completed"
+    assert detail["runs"][0]["summary"]["engine"] == "aegis-customer-edge/1.0"
+    assert len(detail["runs"][0]["summary"]["teamResults"]) == 7
+    assert any(item["title"] == "package.json is not paired with a lockfile" for item in detail["findings"])
+    exported = client.get(f"/api/v1/engagements/{engagement_id}/export")
+    assert exported.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
+        register = json.loads(archive.read("engagement.json"))
+        assert register["runs"][0]["summary"]["engine"] == "aegis-customer-edge/1.0"
 
 
 def test_engagement_intake_media_execution_comparison_and_export(app_bundle):

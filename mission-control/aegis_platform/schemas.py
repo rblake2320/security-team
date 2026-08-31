@@ -80,6 +80,10 @@ class TaskComplete(BaseModel):
     error: str | None = Field(default=None, max_length=4000)
 
 
+class TaskLeaseRenew(BaseModel):
+    lease_token: str = Field(min_length=24, max_length=256, alias="leaseToken")
+
+
 TeamName = Literal["purple", "white", "yellow", "green", "orange", "blue", "red"]
 
 

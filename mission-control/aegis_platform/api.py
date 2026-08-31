@@ -70,6 +70,7 @@ from .schemas import (
     SecurityControlUpdate,
     TaskComplete,
     TaskCreate,
+    TaskLeaseRenew,
     ViolationDecision,
 )
 from .security import AccessVerifier, AuthenticationError, scrub, secret_matches
@@ -98,6 +99,7 @@ from .service import (
     recent_audit,
     resolve_context,
     retention_sweep,
+    renew_task_lease,
     revoke_connector,
     serialize_agent,
     serialize_approval,
@@ -615,6 +617,16 @@ def create_app(
         sync_assessment_result(session, task)
         sync_asset_analysis_result(session, task)
         return {"task": serialize_task(task)}
+
+    @app.post("/api/v1/connector/tasks/{task_id}/renew")
+    def task_lease_renew(
+        task_id: str,
+        body: TaskLeaseRenew,
+        session: Session = Depends(get_session),
+        connector: Connector = Depends(connector_context),
+    ) -> dict[str, Any]:
+        task = renew_task_lease(session, connector, task_id, body.lease_token, settings)
+        return {"taskId": task.id, "leaseSeconds": settings.lease_seconds, "renewedAt": iso(utcnow())}
 
     @app.get("/api/v1/connector/tasks/{task_id}/evidence")
     def connector_task_evidence(

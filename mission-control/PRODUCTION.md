@@ -71,6 +71,10 @@ Before creating the public hostname:
 
 The application also validates the human Access JWT audience/issuer and Host header. Connector endpoints depend on the Tunnel/Access service policy plus the connector's separately scoped AEGIS credential.
 
+Install the outbound-only customer-edge runtime from `Dockerfile.connector` or run `python -m aegis_connector` on the customer-owned machine. Configure `AEGIS_ALLOWED_ROOTS` and `AEGIS_ALLOWED_HOSTS` independently of the server-side engagement scope: both boundaries must permit a target before the connector touches it. Use `--doctor` to prove the heartbeat, then run the worker as a supervised service. A provisioned credential without a live heartbeat remains **offline** in Mission Control and cannot be treated as an executor.
+
+The production core is model-independent. Do not configure any model-provider credential to satisfy readiness: the connector's repository, HTTP, evidence, and gate engines are deterministic and use no model SDK. Any future model-backed enrichment must be isolated behind a distinct optional capability and may not participate in identity, authorization, approval, lease, audit-chain, or automatic-failure decisions.
+
 ## 4. Validate and start the platform
 
 From `mission-control/deploy/vps`:
