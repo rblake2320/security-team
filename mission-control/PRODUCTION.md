@@ -26,6 +26,13 @@ Use an Ubuntu LTS VPS. Patch it, create a non-root deployment user, install Dock
 
 Copy the `mission-control` directory to an owner-controlled deployment directory on the VPS. Do not copy `.env` files, `runtime`, test databases, the local audit ledger, or private owner data.
 
+For updates to an existing installation, create a Git archive of the reviewed
+`mission-control` tree with an `AEGIS_COMMIT` receipt, transfer it to `/tmp`, and run
+`deploy/vps/release.sh ARCHIVE RELEASE_TAG RELEASE_COMMIT`. The release script validates
+archive paths and the commit receipt, builds digest-pinned dependencies, labels both
+runtime images with the commit, switches `/opt/aegis/current` atomically, and rolls back
+both containers if any health or post-deployment boundary check fails.
+
 ## 2. Create production secrets
 
 Copy `deploy/vps/.env.production.example` to `deploy/vps/.env.production`, set permissions to owner-read/write only, and replace every placeholder. Generate unrelated random values for the database password, token pepper, evidence master key, and tunnel token.

@@ -103,6 +103,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Validate release automation
+        run: bash -n mission-control/deploy/vps/release.sh
+
       - name: Build production image
         run: docker build --pull --tag aegis-mission-control:ci ./mission-control
 

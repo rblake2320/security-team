@@ -1,4 +1,4 @@
-FROM node:22-alpine AS web-build
+FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS web-build
 WORKDIR /build/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
@@ -6,7 +6,9 @@ COPY web/ ./
 ARG AEGIS_WEB_BUILD=operator
 RUN if [ "$AEGIS_WEB_BUILD" = "showcase" ]; then npm run build:showcase; else npm run build; fi
 
-FROM python:3.12-slim AS runtime
+FROM python:3.12-slim@sha256:09f7da3bc104798d0afb40bc08d23ab2da20a76130cec1f2ef170848f5d85217 AS runtime
+ARG AEGIS_COMMIT=unknown
+LABEL org.opencontainers.image.revision="$AEGIS_COMMIT"
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
