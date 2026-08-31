@@ -130,6 +130,9 @@ Every team folder has the same shape:
 | 19 | [`19_aegis_trust_model.md`](00-shared/19_aegis_trust_model.md) | §20 **Five-key trust model** — authorization / execution / evidence / assessment / revocation |
 | 20 | [`20_closure_plan.md`](00-shared/20_closure_plan.md) | §21 **Closure plan** — the seven open items, in prescribed order |
 | 21 | [`21_readiness_gate.md`](00-shared/21_readiness_gate.md) | §22 **Readiness gate + state model** — automated by `PROGRAM-READINESS-GATE-001`; what may and may not be called assurance |
+| 22 | [`22_assurance_claims.md`](00-shared/22_assurance_claims.md) | §23 **Assurance claim gate** — no security property is credited without a mechanism, assumptions, falsification, and evidence |
+| 23 | [`23_completion_register.md`](00-shared/23_completion_register.md) | §24 **Completion register** — falsifiable exit criteria for every remaining program item |
+| 24 | [`24_application_security_baseline.md`](00-shared/24_application_security_baseline.md) | §25 **Application security abuse-case baseline** — backend enforcement, access control, workflow integrity, external API validation, SSRF, limits, and API inventory |
 | — | [`incident_2026-08-15_recursive_process_exhaustion.md`](00-shared/incident_2026-08-15_recursive_process_exhaustion.md) | **Incident record** (not part of the numbered sequence) — recursive process spawning in the program's own tooling, root cause, fix commits, kernel-enforced containment, open items |
 
 ### Team charters (§2)

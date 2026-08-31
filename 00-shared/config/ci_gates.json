@@ -40,6 +40,13 @@
       ]
     },
     {
+      "id": "appsec-baseline",
+      "name": "application security baseline falsification tests",
+      "kind": "unittest",
+      "path": "00-shared/tools",
+      "pattern": "test_appsec_baseline.py"
+    },
+    {
       "id": "commitment",
       "name": "commitment falsification tests",
       "kind": "unittest",
@@ -51,7 +58,8 @@
       "name": "exercise harness tests",
       "kind": "unittest",
       "path": "exercise/tests",
-      "pattern": "test_*.py"
+      "pattern": "test_*.py",
+      "sandbox_copy": true
     },
     {
       "id": "purple",

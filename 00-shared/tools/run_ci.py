@@ -4,6 +4,7 @@
     python 00-shared/tools/run_ci.py              # engineering gates (hold permitted)
     python 00-shared/tools/run_ci.py --assurance  # assurance gate (fails closed)
     python 00-shared/tools/run_ci.py --json       # machine-readable result
+    python 00-shared/tools/run_ci.py --gate red   # run one named engineering gate
 
 Exit 0 = all gates pass. Exit 1 = a gate failed.
 
@@ -30,8 +31,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -55,9 +58,23 @@ def build_command(gate: dict) -> list[str]:
 
 def run_gate(gate: dict) -> tuple[bool, float, str]:
     env = dict(os.environ)
-    if gate.get("pythonpath"):
-        env["PYTHONPATH"] = str(PROGRAM / gate["pythonpath"])
     t0 = time.time()
+    workspace = PROGRAM
+    sandbox: str | None = None
+    if gate.get("sandbox_copy"):
+        sandbox = tempfile.mkdtemp(prefix=f"aegis-{gate['id']}-")
+        workspace = Path(sandbox) / "repo"
+        ignore = shutil.ignore_patterns(
+            ".git", "__pycache__", ".pytest_cache", ".ruff_cache", ".aegis-sweep",
+            "_callosum_*", "_scratch_*",
+        )
+        try:
+            shutil.copytree(PROGRAM, workspace, ignore=ignore, symlinks=True)
+        except OSError as exc:
+            shutil.rmtree(sandbox, ignore_errors=True)
+            return False, time.time() - t0, f"sandbox copy failed: {exc}"
+    if gate.get("pythonpath"):
+        env["PYTHONPATH"] = str(workspace / gate["pythonpath"])
     # LOW (static sweep, 2026-08-15): every sibling gate-runner in this program times
     # out its subprocess (claim_check.py: 300s per pytest invocation,
     # ci_unittest_gate.py: 120s) except this one. A hung gate previously hung the
@@ -67,12 +84,16 @@ def run_gate(gate: dict) -> tuple[bool, float, str]:
     # one were maximally slow, and the actual measured full pass completes in well
     # under a minute.
     try:
-        proc = subprocess.run(build_command(gate), cwd=str(PROGRAM), env=env,
-                              capture_output=True, text=True, timeout=1200)
-    except subprocess.TimeoutExpired as exc:
-        output = ((exc.stdout or "") + (exc.stderr or "")).strip()
-        return False, time.time() - t0, (output + "\nTIMED OUT after 1200s").strip()
-    return proc.returncode == 0, time.time() - t0, (proc.stdout + proc.stderr).strip()
+        try:
+            proc = subprocess.run(build_command(gate), cwd=str(workspace), env=env,
+                                  capture_output=True, text=True, timeout=1200)
+        except subprocess.TimeoutExpired as exc:
+            output = ((exc.stdout or "") + (exc.stderr or "")).strip()
+            return False, time.time() - t0, (output + "\nTIMED OUT after 1200s").strip()
+        return proc.returncode == 0, time.time() - t0, (proc.stdout + proc.stderr).strip()
+    finally:
+        if sandbox is not None:
+            shutil.rmtree(sandbox, ignore_errors=True)
 
 
 def main() -> int:
@@ -80,10 +101,19 @@ def main() -> int:
     ap.add_argument("--assurance", action="store_true",
                     help="run the assurance gate, which fails closed while gates are pending")
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--gate", action="append", default=[], metavar="ID",
+                    help="run only the named gate; repeat to select more than one")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 
     gates = load_gates(args.assurance)
+    if args.gate:
+        known = {gate["id"] for gate in gates}
+        unknown = sorted(set(args.gate) - known)
+        if unknown:
+            ap.error("unknown gate id(s) for this mode: " + ", ".join(unknown))
+        selected = set(args.gate)
+        gates = [gate for gate in gates if gate["id"] in selected]
     label = "ASSURANCE" if args.assurance else "ENGINEERING"
     width = max(len(g["name"]) for g in gates)
     results, failures = [], []

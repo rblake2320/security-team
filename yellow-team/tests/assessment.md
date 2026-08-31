@@ -21,10 +21,14 @@ Framework and integrated exercise: [`00-shared/17`](../../00-shared/17_capabilit
 synthetic CUI while preventing cross-project access. Functional requirements are given;
 **expected weaknesses are not disclosed.**
 
-Tested: authentication; authorization; **object-level access control**; input validation;
-error handling; secrets management; dependency integrity; logging without sensitive-data
-leakage; database permissions; IaC; CI/CD controls; SBOM; unit, integration, and security
-regression tests; threat-model completion; remediation turnaround.
+Tested: authentication; authorization; **function-, object-, and property-level access control**;
+business-workflow ordering and replay; external-response validation; SSRF resistance; resource
+and automation limits; API inventory; input validation; error handling; secrets management;
+dependency integrity; logging without sensitive-data leakage; database permissions; IaC; CI/CD
+controls; SBOM; unit, integration, and security regression tests; threat-model completion;
+remediation turnaround. Use the negative-test matrix in the
+[application security baseline](../../00-shared/24_application_security_baseline.md); UI behavior
+is never accepted as enforcement evidence.
 
 Gauntlet: code review; SAST and secret scanning; dependency and container scanning; IaC policy
 checks; DAST/API testing; manual Orange abuse-case review; Green observability validation.

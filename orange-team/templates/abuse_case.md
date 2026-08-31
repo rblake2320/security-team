@@ -4,6 +4,7 @@
 Title:
 System:
 Related threat model element:
+Application security baseline row (if applicable):
 
 ## Narrative
 As an attacker with <starting position>,

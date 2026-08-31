@@ -58,6 +58,8 @@ class GateManifestTests(unittest.TestCase):
         for g in self.engineering + self.assurance:
             with self.subTest(gate=g["id"]):
                 self.assertIn(g["kind"], {"unittest", "command"})
+                self.assertIsInstance(g.get("sandbox_copy", False), bool,
+                                      "sandbox_copy must be a boolean when present")
                 if g["kind"] == "unittest":
                     self.assertTrue((PROGRAM / g["path"]).is_dir(),
                                     f"gate path missing: {g['path']}")

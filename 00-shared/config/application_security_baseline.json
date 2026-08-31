@@ -1,0 +1,94 @@
+{
+  "schema": "program.application-security-baseline/1.0",
+  "version": "1.0",
+  "document": "00-shared/24_application_security_baseline.md",
+  "control_owners": {
+    "abuse_case": "orange",
+    "implementation_and_regression": "yellow",
+    "telemetry": "green",
+    "controlled_exercise": "purple",
+    "independent_authorized_assessment": "red"
+  },
+  "controls": [
+    {
+      "id": "APP-01",
+      "source": "source-notes",
+      "title": "Backend enforcement",
+      "risk": "The application treats UI visibility or client-side validation as a security boundary.",
+      "invariant": "Every entry point enforces authentication, authorization, validation, and workflow rules using trusted server-side state.",
+      "negative_tests": ["direct_request_without_ui", "hidden_route", "client_disabled_field"]
+    },
+    {
+      "id": "APP-02",
+      "source": "source-notes",
+      "title": "Function-level authorization",
+      "risk": "A user invokes an administrative or otherwise unauthorized operation.",
+      "invariant": "Every action is denied by default unless policy explicitly permits the actor to perform it.",
+      "negative_tests": ["standard_user_admin_mutation", "alternate_method_or_path"]
+    },
+    {
+      "id": "APP-03",
+      "source": "source-notes",
+      "title": "Object-level authorization",
+      "risk": "A user accesses another user's or tenant's object by changing an identifier.",
+      "invariant": "Every lookup and mutation is scoped to the actor's tenant and authorized relationship to the object.",
+      "negative_tests": ["cross_user_identifier", "cross_tenant_identifier", "nested_resource_identifier"]
+    },
+    {
+      "id": "APP-04",
+      "source": "source-notes",
+      "title": "Property-level authorization",
+      "risk": "A user reads or writes a field such as role, owner, tenant, price, or approval state without permission.",
+      "invariant": "Operation-specific allowlists control writable and readable properties; server-controlled values come from trusted state.",
+      "negative_tests": ["privileged_field", "unknown_field", "nested_read_only_field"]
+    },
+    {
+      "id": "APP-05",
+      "source": "source-notes",
+      "title": "Business workflow integrity",
+      "risk": "A caller skips, reorders, repeats, or races a required business step.",
+      "invariant": "Sensitive workflows use explicit server-side states, legal transitions, preconditions, transaction boundaries, and anti-replay rules.",
+      "negative_tests": ["out_of_order_step", "replayed_step", "concurrent_transition", "changed_business_fact"]
+    },
+    {
+      "id": "APP-06",
+      "source": "source-notes",
+      "title": "External API validation",
+      "risk": "The application accepts an external service response or callback without independent validation and transaction binding.",
+      "invariant": "External claims are authenticated, schema- and semantics-validated, freshness-checked, transaction-bound, least-privileged, and reconciled where material.",
+      "negative_tests": ["replayed_response", "expired_response", "cross_transaction_binding", "altered_response"]
+    },
+    {
+      "id": "APP-07",
+      "source": "source-notes",
+      "title": "SSRF resistance",
+      "risk": "User-controlled input makes the server contact an unintended destination.",
+      "invariant": "Destinations are allowlisted and revalidated after resolution; forbidden networks and protocols are blocked, redirects are disabled, and egress is constrained.",
+      "negative_tests": ["alternate_ip_encoding", "dns_change", "redirect", "private_or_metadata_destination", "unsupported_scheme"]
+    },
+    {
+      "id": "APP-08",
+      "source": "owasp-api-2023",
+      "title": "Resource consumption bounds",
+      "risk": "Requests exhaust compute, memory, storage, concurrency, queues, provider calls, or money.",
+      "invariant": "Per-request, actor, tenant, operation, dependency, and global budgets bound all expensive work.",
+      "negative_tests": ["pagination_or_upload_limit", "concurrent_slow_requests", "provider_quota_limit"]
+    },
+    {
+      "id": "APP-09",
+      "source": "owasp-api-2023",
+      "title": "Sensitive-flow automation resistance",
+      "risk": "A valid business operation is abused at machine scale across distributed identities or infrastructure.",
+      "invariant": "Sensitive flows enforce contextual velocity, uniqueness, anti-replay, inventory, step-up, anomaly, and recoverable business limits.",
+      "negative_tests": ["distributed_accounts", "distributed_addresses", "timing_variation"]
+    },
+    {
+      "id": "APP-10",
+      "source": "owasp-api-2023",
+      "title": "Complete API inventory and consistent policy",
+      "risk": "An obsolete, debug, alternate, batch, or asynchronous interface bypasses the main security policy.",
+      "invariant": "Every deployed interface and version is inventoried, owned, policy-covered, and removed when obsolete.",
+      "negative_tests": ["alternate_version", "alternate_encoding", "batch_endpoint", "asynchronous_consumer", "unknown_surface"]
+    }
+  ]
+}

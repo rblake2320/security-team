@@ -25,7 +25,9 @@ Required output: trust-boundary diagram; data-flow diagram; asset and privilege 
 abuse cases; attack trees; identity and authorization attack paths; API and business-logic
 weaknesses; cloud and CI/CD attack paths; AI-specific abuse cases if applicable; ranked
 engineering recommendations; safe proof-of-concept tests; automated regression-test proposals;
-developer briefing.
+developer briefing. For applications and APIs, explicitly disposition every row of the
+[application security abuse-case baseline](../../00-shared/24_application_security_baseline.md)
+as applicable, not applicable with rationale, or an evidenced deviation.
 
 **Finding weaknesses alone is insufficient** — E + T + N together outweigh X, because the role
 exists to change what gets built, not to produce a list.
