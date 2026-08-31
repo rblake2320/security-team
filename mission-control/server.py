@@ -613,7 +613,7 @@ class Handler(BaseHTTPRequestHandler):
         )
         self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 
-    def _json(self, status: int, payload: Any) -> None:
+    def _json(self, status: int, payload: Any, *, head_only: bool = False) -> None:
         body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -621,7 +621,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self._security_headers()
         self.end_headers()
-        self.wfile.write(body)
+        if not head_only:
+            self.wfile.write(body)
 
     def _same_origin(self) -> bool:
         origin = self.headers.get("Origin")
@@ -659,6 +660,12 @@ class Handler(BaseHTTPRequestHandler):
         return value
 
     def do_GET(self) -> None:  # noqa: N802
+        self._handle_read(head_only=False)
+
+    def do_HEAD(self) -> None:  # noqa: N802
+        self._handle_read(head_only=True)
+
+    def _handle_read(self, *, head_only: bool) -> None:
         path = urllib.parse.urlparse(self.path).path
         if path == "/api/health":
             return self._json(
@@ -670,21 +677,35 @@ class Handler(BaseHTTPRequestHandler):
                     "accessHeaderRequired": self.control.require_access_header,
                     "at": utc_now(),
                 },
+                head_only=head_only,
             )
         if path.startswith("/api/") and not self._access_authorized():
-            return self._json(401, {"error": "a validated Cloudflare Access assertion is required"})
+            return self._json(
+                401,
+                {"error": "a validated Cloudflare Access assertion is required"},
+                head_only=head_only,
+            )
         if path == "/api/snapshot":
-            return self._json(200, self.control.snapshot())
+            return self._json(200, self.control.snapshot(), head_only=head_only)
         if path == "/api/runs":
-            return self._json(200, {"runs": self.control.list_runs()})
+            if not self.control.controls_enabled:
+                return self._json(404, {"error": "not found"}, head_only=head_only)
+            return self._json(200, {"runs": self.control.list_runs()}, head_only=head_only)
         if path == "/api/activity":
+            if not self.control.controls_enabled:
+                return self._json(404, {"error": "not found"}, head_only=head_only)
             return self._json(
                 200,
                 {"activity": self.control.audit.recent(50), "ledger": self.control.audit.verify()},
+                head_only=head_only,
             )
         if path == "/api/stream":
-            return self._stream()
-        return self._static(path)
+            if not self.control.controls_enabled:
+                return self._json(404, {"error": "not found"}, head_only=head_only)
+            return self._stream(head_only=head_only)
+        if path.startswith("/api/"):
+            return self._json(404, {"error": "not found"}, head_only=head_only)
+        return self._static(path, head_only=head_only)
 
     def do_POST(self) -> None:  # noqa: N802
         path = urllib.parse.urlparse(self.path).path
@@ -713,13 +734,16 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError as exc:
             return self._json(400, {"error": str(exc)})
 
-    def _stream(self) -> None:
+    def _stream(self, *, head_only: bool = False) -> None:
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "keep-alive")
         self.send_header("X-Accel-Buffering", "no")
+        self._security_headers()
         self.end_headers()
+        if head_only:
+            return
         try:
             for _ in range(180):
                 payload = json.dumps(self.control.snapshot(), separators=(",", ":"), ensure_ascii=False)
@@ -729,7 +753,7 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
             return
 
-    def _static(self, request_path: str) -> None:
+    def _static(self, request_path: str, *, head_only: bool = False) -> None:
         if not self.control.dist.exists():
             return self._json(
                 503,
@@ -756,7 +780,8 @@ class Handler(BaseHTTPRequestHandler):
         )
         self._security_headers()
         self.end_headers()
-        self.wfile.write(body)
+        if not head_only:
+            self.wfile.write(body)
 
 
 def main(argv: list[str] | None = None) -> int:

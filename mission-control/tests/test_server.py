@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import http.client
 import sys
 import tempfile
+import threading
 import unittest
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 
@@ -75,6 +78,67 @@ class MissionControlContractTests(unittest.TestCase):
         self.assertFalse(server.allows_spa_fallback("assets/index.js.map"))
         self.assertFalse(server.allows_spa_fallback("security.txt"))
         self.assertTrue(server.allows_spa_fallback("evidence"))
+
+
+class ShowcaseHTTPBoundaryTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        self.dist = Path(self.temporary_directory.name) / "dist"
+        self.dist.mkdir()
+        (self.dist / "index.html").write_text("<!doctype html><title>AEGIS</title>", encoding="utf-8")
+        control = server.MissionControl(PROGRAM_ROOT, self.dist, mode="demo")
+
+        class QuietHandler(server.Handler):
+            def log_message(self, fmt, *args):
+                return
+
+        QuietHandler.control = control
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), QuietHandler)
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread.start()
+
+    def tearDown(self) -> None:
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        self.thread.join(timeout=2)
+        self.temporary_directory.cleanup()
+
+    def request(self, method: str, path: str, *, body: str | None = None):
+        connection = http.client.HTTPConnection("127.0.0.1", self.httpd.server_port, timeout=2)
+        headers = {"Content-Type": "application/json"} if body is not None else {}
+        connection.request(method, path, body=body, headers=headers)
+        response = connection.getresponse()
+        payload = response.read()
+        result = response.status, dict(response.getheaders()), payload
+        connection.close()
+        return result
+
+    def test_head_static_route_matches_get_without_a_body(self) -> None:
+        get_status, get_headers, get_body = self.request("GET", "/")
+        head_status, head_headers, head_body = self.request("HEAD", "/")
+        self.assertEqual((get_status, head_status), (200, 200))
+        self.assertEqual(head_body, b"")
+        self.assertEqual(head_headers["Content-Length"], get_headers["Content-Length"])
+        self.assertEqual(int(get_headers["Content-Length"]), len(get_body))
+        self.assertEqual(head_headers["X-Frame-Options"], "DENY")
+
+    def test_demo_exposes_only_health_and_snapshot_api_reads(self) -> None:
+        for path in ("/api/runs", "/api/activity", "/api/stream", "/api/v1/dashboard"):
+            with self.subTest(path=path):
+                status, headers, _body = self.request("GET", path)
+                self.assertEqual(status, 404)
+                self.assertEqual(headers["Content-Type"], "application/json; charset=utf-8")
+
+        self.assertEqual(self.request("GET", "/api/health")[0], 200)
+        self.assertEqual(self.request("GET", "/api/snapshot")[0], 200)
+
+    def test_demo_control_post_fails_before_gate_validation(self) -> None:
+        status, _headers, _body = self.request(
+            "POST",
+            "/api/runs",
+            body='{"gateId":"definitely-not-real","mode":"engineering"}',
+        )
+        self.assertEqual(status, 403)
 
 
 if __name__ == "__main__":

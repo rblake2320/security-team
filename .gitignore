@@ -31,6 +31,7 @@ exercise/evidence/used_nonces.json
 *.lock
 exercise/evidence/_test_*.json
 **/runtime/
+**/.aegis-sweep/
 *.db
 *.db-wal
 *.db-shm
