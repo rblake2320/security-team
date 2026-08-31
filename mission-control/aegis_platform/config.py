@@ -5,6 +5,7 @@ import base64
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 PLATFORM_ROOT = Path(__file__).resolve().parents[1]
@@ -95,6 +96,8 @@ class Settings:
             failures: list[str] = []
             if not self.database_url.startswith(("postgresql://", "postgresql+psycopg://")):
                 failures.append("DATABASE_URL must use PostgreSQL")
+            elif urlparse(self.database_url).username != "aegis_runtime":
+                failures.append("DATABASE_URL must use the restricted aegis_runtime role")
             if self.auth_mode != "cloudflare":
                 failures.append("AUTH_MODE must be cloudflare")
             if not self.cloudflare_team_domain or not self.cloudflare_audience:

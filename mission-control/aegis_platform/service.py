@@ -32,6 +32,13 @@ from .models import (
 from .policies import ACTION_CATALOG, CONNECTOR_CAPABILITIES, ROLES, action_policy, require_permission
 from .security import AuthenticationError, Identity, issue_secret, normalize_email, scrub, secret_digest, secret_matches
 from .storage import EvidenceStore
+from .tenancy import (
+    set_connector_lookup_context,
+    set_identity_email_context,
+    set_invitation_lookup_context,
+    set_tenant_context,
+    set_user_lookup_context,
+)
 
 
 @dataclass(frozen=True)
@@ -59,9 +66,11 @@ def resolve_context(
     identity: Identity,
     workspace: str | None = None,
 ) -> RequestContext:
+    set_identity_email_context(session, identity.email)
     user = session.scalar(select(User).where(User.email == identity.email))
     if not user or user.status != "active":
         raise AuthenticationError("this identity has not been invited to Mission Control")
+    set_user_lookup_context(session, user.id)
     statement = (
         select(Membership, Organization)
         .join(Organization, Organization.id == Membership.organization_id)
@@ -75,6 +84,7 @@ def resolve_context(
     if not row:
         raise PermissionError("this identity has no access to the requested workspace")
     membership, organization = row
+    set_tenant_context(session, organization.id)
     user.last_login_at = utcnow()
     return RequestContext(identity, user, organization, membership)
 
@@ -83,6 +93,7 @@ def authenticate_connector(session: Session, token: str, settings: Settings) -> 
     if not token.startswith("aegc_") or len(token) < 24:
         raise AuthenticationError("invalid connector credential")
     prefix = token[:16]
+    set_connector_lookup_context(session, prefix)
     candidates = session.scalars(
         select(Connector).where(
             Connector.token_prefix == prefix,
@@ -93,6 +104,7 @@ def authenticate_connector(session: Session, token: str, settings: Settings) -> 
         if secret_matches(token, connector.token_hash, settings.token_pepper):
             if connector.status == "revoked":
                 break
+            set_tenant_context(session, connector.organization_id)
             return connector
     raise AuthenticationError("invalid connector credential")
 
@@ -200,6 +212,7 @@ def accept_invitation(
     settings: Settings,
 ) -> RequestContext:
     digest = secret_digest(token, settings.token_pepper)
+    set_invitation_lookup_context(session, digest)
     invitation = session.scalar(
         select(Invitation).where(Invitation.token_hash == digest).with_for_update()
     )
@@ -212,6 +225,8 @@ def accept_invitation(
         raise PermissionError("invitation is invalid")
     if normalize_email(identity.email) != invitation.email:
         raise PermissionError("invitation belongs to a different identity")
+    set_tenant_context(session, invitation.organization_id)
+    set_identity_email_context(session, identity.email)
     user = session.scalar(select(User).where(User.email == identity.email))
     if not user:
         user = User(email=identity.email, display_name=identity.email.split("@", 1)[0])

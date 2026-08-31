@@ -137,7 +137,8 @@ snapshot="$(docker compose --env-file .env.showcase -f compose.showcase.yml exec
 printf '%s' "$snapshot" | grep -F -q '"controlsEnabled":false'
 printf '%s' "$snapshot" | grep -F -q '"dataClass":"redacted-manifests-and-synthetic-agent-feed"'
 revision_after="$(docker compose --env-file .env.production -f compose.production.yml exec -T app alembic current 2>/dev/null | tail -n 1)"
-[ "$revision_after" = "$revision_before" ] || fail "migration revision changed unexpectedly"
+revision_expected="$(docker compose --env-file .env.production -f compose.production.yml exec -T app alembic heads 2>/dev/null | tail -n 1)"
+[ "$revision_after" = "$revision_expected" ] || fail "database did not reach the reviewed migration head"
 
 switched=0
 printf 'PRODUCTION_APP=HEALTHY\n'
@@ -148,6 +149,7 @@ printf 'SHOWCASE_PROFILE=PASS\n'
 printf 'SHOWCASE_SOURCE_MAPS=PASS\n'
 printf 'SHOWCASE_PRIVATE_ROUTES=PASS\n'
 printf 'SHOWCASE_DATA_BOUNDARY=PASS\n'
+printf 'MIGRATION_BEFORE=%s\n' "$revision_before"
 printf 'MIGRATION=%s\n' "$revision_after"
 printf 'RELEASE=%s\n' "$release"
 printf 'COMMIT=%s\n' "$release_commit"

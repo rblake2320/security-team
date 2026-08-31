@@ -9,7 +9,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from .config import Settings
 from .coverage import seed_security_controls
-from .models import AIPolicy, Base, Membership, Organization, Program, RetentionPolicy, User, utcnow
+from .models import AIPolicy, Base, Membership, Organization, Program, RetentionPolicy, User, new_id, utcnow
+from .tenancy import set_bootstrap_slug_context, set_identity_email_context, set_tenant_context
 
 
 class Database:
@@ -55,14 +56,17 @@ class Database:
     def bootstrap(self) -> tuple[str, str]:
         """Create the first owner/workspace idempotently; return user and organization IDs."""
         with self.session() as session:
+            set_bootstrap_slug_context(session, self.settings.bootstrap_slug)
             organization = session.scalar(
                 select(Organization).where(Organization.slug == self.settings.bootstrap_slug)
             )
             if not organization:
                 organization = Organization(
+                    id=new_id(),
                     slug=self.settings.bootstrap_slug,
                     name=self.settings.bootstrap_organization,
                 )
+                set_tenant_context(session, organization.id)
                 session.add(organization)
                 session.flush()
                 session.add(
@@ -88,6 +92,7 @@ class Database:
                 session.add(RetentionPolicy(organization_id=organization.id))
                 session.add(AIPolicy(organization_id=organization.id))
 
+            set_tenant_context(session, organization.id)
             session.flush()
             if not session.scalar(
                 select(Program.id).where(Program.organization_id == organization.id).limit(1)
@@ -118,6 +123,7 @@ class Database:
                 session.add(AIPolicy(organization_id=organization.id))
             seed_security_controls(session, organization.id)
 
+            set_identity_email_context(session, self.settings.bootstrap_email)
             user = session.scalar(select(User).where(User.email == self.settings.bootstrap_email))
             if not user:
                 user = User(

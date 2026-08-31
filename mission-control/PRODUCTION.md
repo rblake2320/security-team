@@ -39,7 +39,18 @@ Copy `deploy/vps/.env.production.example` to `deploy/vps/.env.production`, set p
 
 The evidence key must be 32 random bytes encoded with URL-safe base64. Store an offline recovery copy in the approved secret manager. Losing this key makes evidence unrecoverable; exposing it compromises evidence confidentiality. Never put it in Git, screenshots, logs, chat, or the public demo environment.
 
-`DATABASE_URL` must contain the URL-encoded database password. The database service has no published port and is reachable only on the internal Compose network.
+`DATABASE_ADMIN_URL` must contain the URL-encoded PostgreSQL administrator
+password and is used only for migrations and idempotent runtime-role provisioning.
+`AEGIS_DB_RUNTIME_PASSWORD` must be a different random secret of at least 32
+characters. The entrypoint derives the application URL without logging it and runs
+the API as the restricted `aegis_runtime` database role. Do not set production
+`DATABASE_URL` directly. The database service has no published port and is reachable
+only on the internal Compose network.
+
+PostgreSQL row-level security is forced on every tenant-owned table. Each request
+sets a transaction-local organization context only after human membership,
+connector credential, or invitation validation. Requests without a validated tenant
+context receive no tenant rows, and inserts or updates for another tenant are denied.
 
 Production must set `EVIDENCE_SCANNER_MODE=clamav` and `CLAMAV_HOST=clamav`. The
 scanner has no published port, is reachable only on the internal Compose network,
@@ -86,6 +97,8 @@ Verify these negative and positive paths before inviting anyone:
 - ClamAV accepts bounded clean content, rejects the EICAR test signature, and an
   unavailable scanner leaves evidence quarantined while `/api/ready` returns 503;
 - cross-workspace object identifiers denied;
+- direct PostgreSQL queries as `aegis_runtime` return no tenant rows until a
+  transaction-local tenant context is set, and cross-tenant writes are rejected;
 - critical action denied without successful dry-run and different human approver;
 - kill switch prevents new work and blocks queued/running work.
 
@@ -156,4 +169,10 @@ The strongest one-minute proof is:
 
 ## Honest production boundary
 
-This build supplies a strong single-region beta platform, not a certification or perfect-security claim. Database-enforced row security, externally managed per-tenant keys, advanced detonation/sandbox analysis, multi-region high availability, signed audit checkpoints, billing, contractual compliance mappings, independent penetration testing, and formal certifications remain explicit release-scope work for regulated or large-enterprise use. See `docs/THREAT_MODEL.md`.
+This build supplies a strong single-region beta platform, not a certification or
+perfect-security claim. Externally managed per-tenant keys, advanced
+detonation/sandbox analysis, multi-region high availability, signed audit
+checkpoints, billing, contractual compliance mappings, independent penetration
+testing (including RLS policy review), and formal certifications remain explicit
+release-scope work for regulated or large-enterprise use. See
+`docs/THREAT_MODEL.md`.

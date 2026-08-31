@@ -57,6 +57,27 @@ class ProductionReleaseContractTests(unittest.TestCase):
         )
         self.assertRegex(workflow, r"clamav/clamav:[^\s]+@sha256:[0-9a-f]{64}")
 
+    def test_production_uses_restricted_database_role_and_real_rls_gate(self) -> None:
+        production_env = (MISSION_ROOT / "deploy" / "vps" / ".env.production.example").read_text(
+            encoding="utf-8"
+        )
+        entrypoint = (MISSION_ROOT / "deploy" / "vps" / "entrypoint.sh").read_text(encoding="utf-8")
+        release = (MISSION_ROOT / "deploy" / "vps" / "release.sh").read_text(encoding="utf-8")
+        workflow = (MISSION_ROOT.parent / ".github" / "workflows" / "mission-control.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("DATABASE_ADMIN_URL=", production_env)
+        self.assertIn("AEGIS_DB_RUNTIME_PASSWORD=", production_env)
+        self.assertNotIn("\nDATABASE_URL=", "\n" + production_env)
+        self.assertIn('DATABASE_URL="$DATABASE_ADMIN_URL" alembic upgrade head', entrypoint)
+        self.assertIn("python -m aegis_platform.db_roles provision", entrypoint)
+        self.assertIn("python -m aegis_platform.db_roles runtime-url", entrypoint)
+        self.assertIn("database did not reach the reviewed migration head", release)
+        self.assertIn("MIGRATION_BEFORE=", release)
+        self.assertIn("Verify PostgreSQL row-level tenant isolation", workflow)
+        self.assertIn("verify_postgres_rls.py:/tmp/verify_postgres_rls.py:ro", workflow)
+        self.assertRegex(workflow, r"postgres:16-alpine@sha256:[0-9a-f]{64}")
+
 
 if __name__ == "__main__":
     unittest.main()

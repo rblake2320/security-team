@@ -42,6 +42,7 @@ Open `http://127.0.0.1:8780`. Development identity headers work only from loopba
 - Tenant workspaces, invited users, roles, programs, authorized engagements, connectors, agents, tasks, approvals, evidence, findings, incidents, retention, and exports.
 - An engagement workspace for owner-site reviews, pre-launch reviews, client-authorized work, and continuous assurance. Each engagement records targets, scope, exclusions, stop conditions, authority, selected teams, evidence, assessment runs, findings, and recommendations.
 - Drag-and-drop media intake for documents, images, audio, video, code/data, and archives. Files are encrypted immediately, scanned by a private fail-closed ClamAV service, held in quarantine until cleared, and never made public by the showcase.
+- PostgreSQL-enforced row-level tenant isolation using a restricted runtime role and transaction-local identity/organization context.
 - Versioned assessment runs with stable finding fingerprints, baseline comparison, introduced/persistent/resolved results, and a portable ZIP containing JSON, CSV registers, audit records, and a human-readable manifest.
 - One-time connector credentials stored only as HMAC digests, explicit observation/action capabilities, revocation, heartbeat, idempotent event ingestion, and bounded payloads.
 - Deny-by-default action catalog with risk levels, human approval, successful dry-runs for critical actions, separation of duties, expiring leases, safety levels, and a kill switch.

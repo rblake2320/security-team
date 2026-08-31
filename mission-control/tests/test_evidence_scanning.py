@@ -102,7 +102,7 @@ def test_engine_verdict_controls_evidence_and_outages_fail_closed(tmp_path: Path
 def test_production_configuration_requires_real_scanner() -> None:
     settings = Settings(
         environment="production",
-        database_url="postgresql+psycopg://aegis:password@db:5432/aegis",
+        database_url="postgresql+psycopg://aegis_runtime:password@db:5432/aegis",
         evidence_root=Path("/var/lib/aegis/evidence"),
         evidence_master_key=base64.urlsafe_b64encode(b"k" * 32).decode().rstrip("="),
         auth_mode="cloudflare",

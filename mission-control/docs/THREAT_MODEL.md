@@ -45,7 +45,7 @@ The hosted product does not connect inward to a customer's network. A customer p
 | Human to workspace | cross-tenant access, privilege escalation | invitation admission, tenant membership, role permissions, same-origin control requests, isolation tests |
 | Connector to ingestion API | stolen token, replay, excessive data | one-time hashed token, revocation, scoped capabilities, idempotency keys, body/batch bounds, pseudonymization |
 | Control plane to connector | tool abuse, unintended blast radius | deny-by-default action catalog, payload scrubbing, dry-run, approval, separation of duties, lease expiry, kill switch |
-| Application to PostgreSQL | injection, tenant leakage, tampering, resource exhaustion | SQLAlchemy parameterization, tenant predicates, dedicated database, statement timeouts, migrations, backup/restore drills |
+| Application to PostgreSQL | injection, tenant leakage, tampering, resource exhaustion | SQLAlchemy parameterization, restricted runtime role, forced tenant RLS, transaction-local identity context, dedicated database, statement timeouts, migrations, backup/restore drills |
 | Application to evidence store | malware, path traversal, disclosure, tampering | filename/path normalization, type/size allowlist, fail-closed private ClamAV scan, quarantine, AES-GCM envelope encryption, SHA-256, legal holds |
 | AI observation to policy engine | surveillance overcollection, prompt leakage, evasion | no prompt/response fields, user/device HMAC pseudonyms, domain normalization, model/tool/MCP inventory, explicit unknown state |
 | Build to runtime | dependency or image compromise | pinned lockfile, dependency audit, migration check, multi-stage image, non-root/read-only runtime, dropped capabilities |
@@ -78,7 +78,7 @@ These cases are owned across the Purple, White, Yellow, Green, Orange, Blue, and
 
 | ID | Risk | STRIDE | Inherent | Implemented controls | Residual | Required follow-up |
 |---|---|---|---|---|---|---|
-| R-001 | Cross-tenant object access | I/E | critical | context resolution, tenant predicates on every object lookup, opaque IDs, automated two-workspace tests | medium | independent penetration test; add database-level tenant enforcement before high-regulation use |
+| R-001 | Cross-tenant object access | I/E | critical | context resolution, tenant predicates, restricted runtime role, forced PostgreSQL RLS, transaction-local tenant binding, opaque IDs, automated two-workspace tests | low | independent penetration test and continued policy-drift testing |
 | R-002 | Owner data copied into showcase | I | critical | separate demo mode/container/tunnel, no database, synthetic feed, controls rejected server-side | low | deployment inspection and content scan before every showcase release |
 | R-003 | Stolen connector credential | S/E | high | one-time token, HMAC hash only, scoped capabilities, revocation, Access service policy, audit | medium | rotation workflow, short-lived machine identity option, anomaly rules |
 | R-004 | Unauthorized containment/block action | T/E/D | critical | deny-by-default catalog, successful dry-run, independent approval, scoped connector, lease token/expiry, kill switch | medium | exercise every action-specific rollback and blast-radius limit |
@@ -107,7 +107,8 @@ A release is blocked unless all of the following have evidence:
 
 ## Known residual work before regulated or large-enterprise claims
 
-- Database-enforced row security and externally managed per-tenant keys are not yet implemented.
+- PostgreSQL row security is enforced for tenant-owned tables. Externally managed
+  per-tenant keys are not yet implemented.
 - ClamAV provides a real signature-based malware gate; advanced detonation, archive recursion policy tuning, and a multi-engine service remain risk-based enhancements for hostile high-risk formats.
 - Billing, contractual compliance mappings, regional data residency, legal terms, support operations, and breach notification processes require business decisions outside this codebase.
 - High availability, multi-region recovery, independent penetration testing, and formal SOC 2/ISO certification have not been proven.

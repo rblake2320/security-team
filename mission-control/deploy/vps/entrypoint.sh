@@ -2,7 +2,12 @@
 set -eu
 
 if [ "${AEGIS_ENV:-development}" = "production" ]; then
-  alembic upgrade head
+  : "${DATABASE_ADMIN_URL:?set DATABASE_ADMIN_URL to the migration-only PostgreSQL credential}"
+  : "${AEGIS_DB_RUNTIME_PASSWORD:?set AEGIS_DB_RUNTIME_PASSWORD to an independent secret}"
+  DATABASE_URL="$DATABASE_ADMIN_URL" alembic upgrade head
+  python -m aegis_platform.db_roles provision
+  DATABASE_URL="$(python -m aegis_platform.db_roles runtime-url)"
+  export DATABASE_URL
 fi
 
 exec uvicorn aegis_platform.api:create_app \
