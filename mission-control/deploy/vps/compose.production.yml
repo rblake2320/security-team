@@ -85,7 +85,7 @@ services:
     image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     profiles: ["maintenance"]
     env_file: .env.production
-    entrypoint: ["/opt/aegis/backup.sh"]
+    entrypoint: ["/bin/sh", "/opt/aegis/backup.sh"]
     depends_on:
       db:
         condition: service_healthy
@@ -105,7 +105,7 @@ services:
     image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
     profiles: ["maintenance"]
     env_file: .env.production
-    entrypoint: ["/opt/aegis/restore-drill.sh"]
+    entrypoint: ["/bin/sh", "/opt/aegis/restore-drill.sh"]
     depends_on:
       db:
         condition: service_healthy
