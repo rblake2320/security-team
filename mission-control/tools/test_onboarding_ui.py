@@ -204,6 +204,8 @@ def run_browser_checks(base_url: str) -> None:
         assert_focus_is_inside(page, guide, "orientation guide")
         assert_focus_trap(page, guide, "orientation guide")
         assert "interactive and browser-contained" in guide.inner_text()
+        assert "PRODUCT TOUR / PUBLIC SHOWCASE" in guide.inner_text()
+        assert "FIELD GUIDE" not in guide.inner_text()
         for label in (
             "START / COMMAND",
             "SCOPE / ENGAGEMENT",
@@ -246,9 +248,27 @@ def run_browser_checks(base_url: str) -> None:
 
         page.get_by_role("button", name="Command", exact=True).click()
         page.get_by_role("heading", name="Trust is a state. Prove every transition.", level=1).wait_for()
+        overview = page.locator(".view--overview")
+        assert "MODELED SYNTHETIC GATES" in overview.inner_text()
+        assert "Inspect-only public model" in overview.inner_text()
+        assert "Executable from this console" not in overview.inner_text()
+        assert "SIMULATED AGENTS" in overview.inner_text()
+        assert "Worker signals; distinct from 7 review teams" in overview.inner_text()
+        assert "MISSION WORKFLOW / 4 STEPS" in overview.inner_text()
+        assert page.locator(".command-trigger kbd").inner_text() == "Ctrl/⌘ K"
+        assert "AUTO-FAIL OVERRIDE" in overview.inner_text()
+        assert "14.29%" not in overview.inner_text()
+        modeled_gate_buttons = overview.locator(".team-card footer button")
+        assert modeled_gate_buttons.count() == 7
+        for index in range(modeled_gate_buttons.count()):
+            button = modeled_gate_buttons.nth(index)
+            assert button.is_disabled()
+            assert "modeled gate; execution requires the private operator" in button.get_attribute("aria-label")
+        matrix_action_box = page.get_by_role("button", name="Full team matrix").bounding_box()
+        assert matrix_action_box is not None and matrix_action_box["height"] >= 44
         page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
         page.get_by_role("button", name="Gate runner", exact=True).click()
-        page.get_by_role("heading", name="Engineering gate runner", level=1).wait_for()
+        page.get_by_role("heading", name="9 modeled synthetic gates", level=1).wait_for()
         page.wait_for_timeout(100)
         assert page.evaluate("window.location.hash") == "#/gate-runner"
         assert page.evaluate("window.scrollY") <= 1
@@ -264,7 +284,7 @@ def run_browser_checks(base_url: str) -> None:
         page.get_by_role("button", name="Engagements").click()
         page.get_by_role("heading", name="Run a mission. See what AEGIS produces.", level=1).wait_for()
         page.go_back()
-        page.get_by_role("heading", name="Engineering gate runner", level=1).wait_for()
+        page.get_by_role("heading", name="9 modeled synthetic gates", level=1).wait_for()
         assert page.evaluate("window.location.hash") == "#/gate-runner"
 
         for destination in (
@@ -339,10 +359,10 @@ def run_browser_checks(base_url: str) -> None:
         phone.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
         assert phone.evaluate("window.scrollY") > 100
         phone.get_by_role("button", name="Gate runner", exact=True).click()
-        phone.get_by_role("heading", name="Engineering gate runner", level=1).wait_for()
+        phone.get_by_role("heading", name="9 modeled synthetic gates", level=1).wait_for()
         phone.wait_for_timeout(100)
         assert phone.evaluate("window.scrollY") <= 1
-        assert phone.get_by_role("heading", name="Engineering gate runner", level=1).is_visible()
+        assert phone.get_by_role("heading", name="9 modeled synthetic gates", level=1).is_visible()
         view_button = phone.get_by_role("button", name="Adjust view size, currently 100%")
         assert view_button.is_visible()
         view_button.click()
@@ -530,6 +550,11 @@ def main() -> int:
         "SNAPSHOT_ERROR_ANNOUNCEMENT=PASS",
         "BROWSER_ZOOM_SHORTCUTS=PASS",
         "SECONDARY_TOUCH_TARGETS=PASS",
+        "PUBLIC_CLAIM_ACCURACY=PASS",
+        "WORKFLOW_NAMING=PASS",
+        "PLATFORM_SHORTCUT_LABEL=PASS",
+        "DIAGNOSTIC_SCORE_OVERRIDE=PASS",
+        "AGENT_TEAM_RELATIONSHIP=PASS",
     ):
         print(result)
     return 0

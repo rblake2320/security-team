@@ -221,7 +221,7 @@ function TopBar({
         <button type="button" className="command-trigger" onClick={onCommand}>
           <Command size={15} />
           Command
-          <kbd>⌘ K</kbd>
+          <kbd>Ctrl/⌘ K</kbd>
         </button>
         <div className="clock">
           <strong>{now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</strong>
@@ -330,7 +330,7 @@ function ReadinessItem({ gate }: { gate: ReadinessGate }) {
   )
 }
 
-function TeamCard({ team, onRun, busy, expanded = false }: { team: Team; onRun: (id: string) => void; busy: boolean; expanded?: boolean }) {
+function TeamCard({ team, onRun, busy, controlsEnabled, expanded = false }: { team: Team; onRun: (id: string) => void; busy: boolean; controlsEnabled: boolean; expanded?: boolean }) {
   const style = { '--team': team.color } as CSSProperties
   return (
     <article className={`team-card ${expanded ? 'team-card--expanded' : ''}`} style={style}>
@@ -351,12 +351,12 @@ function TeamCard({ team, onRun, busy, expanded = false }: { team: Team; onRun: 
           <strong>{team.passThreshold ? `${Math.round(team.passThreshold * 100)}%` : '—'}</strong>
         </div>
         <div>
-          <span>PROGRAM WEIGHT</span>
-          <strong>{team.programWeight ? `${(team.programWeight * 100).toFixed(2)}%` : '—'}</strong>
+          <span>{controlsEnabled ? 'PROGRAM WEIGHT' : 'SCORE RULE'}</span>
+          <strong>{controlsEnabled ? (team.programWeight ? `${(team.programWeight * 100).toFixed(2)}%` : '—') : 'AUTO-FAIL OVERRIDE'}</strong>
         </div>
-        <button type="button" onClick={() => onRun(team.id)} disabled={busy} aria-label={`Run ${team.name} gate`}>
+        <button type="button" onClick={() => onRun(team.id)} disabled={busy || !controlsEnabled} aria-label={controlsEnabled ? `Run ${team.name} gate` : `${team.name} modeled gate; execution requires the private operator`}>
           {team.status === 'running' ? <RefreshCw className="spin" size={14} /> : <Play size={14} fill="currentColor" />}
-          Run gate
+          {controlsEnabled ? 'Run gate' : 'Modeled gate'}
         </button>
       </footer>
       {expanded && team.automaticFailures.length > 0 && (
@@ -461,8 +461,8 @@ function Overview({ snapshot, runGate, setView, busy, controlsEnabled }: { snaps
 
       <section className="stats-grid">
         <Stat label="READINESS" value={`${program.verified}/${program.total}`} hint={`${pending} prerequisite gates pending`} icon={<Fingerprint size={19} />} />
-        <Stat label="ENGINEERING GATES" value={snapshot.gates.engineeringCount} hint="Executable from this console" icon={<Layers3 size={19} />} />
-        <Stat label="ACTIVE AGENTS" value={snapshot.agents.activeCount} hint={`${snapshot.agents.securityTeamCount ?? 0} attached to this program`} icon={<Bot size={19} />} />
+        <Stat label={demo ? 'MODELED SYNTHETIC GATES' : 'ENGINEERING GATES'} value={snapshot.gates.engineeringCount} hint={demo ? 'Inspect-only public model' : 'Executable from this console'} icon={<Layers3 size={19} />} />
+        <Stat label={demo ? 'SIMULATED AGENTS' : 'ACTIVE AGENTS'} value={snapshot.agents.activeCount} hint={demo ? 'Worker signals; distinct from 7 review teams' : `${snapshot.agents.securityTeamCount ?? 0} attached to this program`} icon={<Bot size={19} />} />
         <Stat label="WORKTREE" value={snapshot.repo.dirty ? snapshot.repo.changedCount : 'CLEAN'} hint={`${snapshot.repo.branch} @ ${snapshot.repo.commit}`} icon={<GitBranch size={19} />} />
       </section>
 
@@ -491,11 +491,11 @@ function Overview({ snapshot, runGate, setView, busy, controlsEnabled }: { snaps
           nested
           overline="SEVEN FUNCTIONS / ONE OPERATING MODEL"
           title="The security spectrum"
-          detail="Each team owns a distinct decision boundary. No score can average away an automatic failure."
+          detail={demo ? 'Seven review functions share three simulated worker signals. Any automatic failure overrides the diagnostic score and remains blocking.' : 'Each team owns a distinct decision boundary. No score can average away an automatic failure.'}
           action={<button type="button" className="text-action" onClick={() => setView('teams')}>Full team matrix <ChevronRight size={15} /></button>}
         />
         <div className="team-grid">
-          {snapshot.teams.map((team) => <TeamCard team={team} onRun={runGate} busy={busy || !controlsEnabled} key={team.id} />)}
+          {snapshot.teams.map((team) => <TeamCard team={team} onRun={runGate} busy={busy} controlsEnabled={controlsEnabled} key={team.id} />)}
         </div>
       </section>
     </div>
@@ -505,9 +505,9 @@ function Overview({ snapshot, runGate, setView, busy, controlsEnabled }: { snaps
 function TeamsView({ snapshot, runGate, busy, controlsEnabled }: { snapshot: Snapshot; runGate: (id: string) => void; busy: boolean; controlsEnabled: boolean }) {
   return (
     <div className="view">
-      <SectionHeading overline="OPERATING MODEL" title="Seven teams. Explicit boundaries." detail="Run a team's engineering contract or inspect the condition that immediately fails its score." />
+      <SectionHeading overline="OPERATING MODEL" title="Seven teams. Explicit boundaries." detail={controlsEnabled ? "Run a team's engineering contract or inspect the condition that immediately fails its score." : 'Inspect seven modeled team contracts. Public execution is replaced by the guided synthetic mission workflow.'} />
       <div className="team-grid team-grid--expanded">
-        {snapshot.teams.map((team) => <TeamCard team={team} onRun={runGate} busy={busy || !controlsEnabled} expanded key={team.id} />)}
+        {snapshot.teams.map((team) => <TeamCard team={team} onRun={runGate} busy={busy} controlsEnabled={controlsEnabled} expanded key={team.id} />)}
       </div>
     </div>
   )
@@ -522,8 +522,8 @@ function GatesView({ snapshot, runGate, busy, onAssurance, controlsEnabled }: { 
   return (
     <div className="view gate-view">
       <SectionHeading
-        overline="EXECUTABLE CONTROL PLANE"
-        title="Engineering gate runner"
+        overline={controlsEnabled ? 'EXECUTABLE CONTROL PLANE' : 'MODELED CONTROL PLANE'}
+        title={controlsEnabled ? 'Engineering gate runner' : `${snapshot.gates.engineeringCount} modeled synthetic gates`}
         detail={controlsEnabled ? 'Commands are derived from ci_gates.json. Arbitrary shell execution is not exposed.' : 'Public showcase mode is read-only. Operator controls are removed at the server boundary.'}
         action={
           <div className="heading-actions">
@@ -537,7 +537,7 @@ function GatesView({ snapshot, runGate, busy, onAssurance, controlsEnabled }: { 
       <div className="gate-layout">
         <section className="panel gate-list-panel">
           <div className="panel-heading">
-            <div><span>MANIFEST / {snapshot.gates.engineeringCount} GATES</span><h2>Verification matrix</h2></div>
+            <div><span>MANIFEST / {snapshot.gates.engineeringCount} {controlsEnabled ? 'GATES' : 'MODELED GATES'}</span><h2>Verification matrix</h2></div>
             <StatusDot online={!busy && controlsEnabled} label={!controlsEnabled ? 'Runner locked' : (busy ? 'Runner occupied' : 'Runner ready')} />
           </div>
           <div className="gate-table" role="list" aria-label="Engineering verification gates">
@@ -547,7 +547,7 @@ function GatesView({ snapshot, runGate, busy, onAssurance, controlsEnabled }: { 
                 <div className="gate-row__name"><strong>{gate.name}</strong><small>{gate.id} · {gate.kind}</small></div>
                 <RunBadge status={gate.status} />
                 <span className="gate-row__time">{elapsed(gate.elapsedSeconds)}</span>
-                <button type="button" onClick={() => runGate(gate.id)} disabled={busy || !controlsEnabled} aria-label={`Run ${gate.name}`}><Play size={13} fill="currentColor" /></button>
+                <button type="button" onClick={() => runGate(gate.id)} disabled={busy || !controlsEnabled} aria-label={controlsEnabled ? `Run ${gate.name}` : `${gate.name} is modeled; execution requires the private operator`}><Play size={13} fill="currentColor" /></button>
               </div>
             ))}
           </div>
@@ -555,7 +555,7 @@ function GatesView({ snapshot, runGate, busy, onAssurance, controlsEnabled }: { 
         <section className="console-panel">
           <header>
             <div className="console-dots"><i /><i /><i /></div>
-            <span><TerminalSquare size={14} /> CONTROL OUTPUT</span>
+            <span><TerminalSquare size={14} /> {controlsEnabled ? 'CONTROL OUTPUT' : 'MODELED OUTPUT'}</span>
             {active && <RunBadge status={active.status} />}
           </header>
           {active ? (
@@ -565,7 +565,7 @@ function GatesView({ snapshot, runGate, busy, onAssurance, controlsEnabled }: { 
               <footer><span>RETURN {active.returnCode ?? '—'}</span><span>ELAPSED {elapsed(active.elapsedSeconds)}</span><span>{shortTime(active.finishedAt ?? active.startedAt)}</span></footer>
             </>
           ) : (
-            <div className="console-empty"><TerminalSquare size={26} /><strong>No run selected</strong><span>Execute a gate to capture bounded output.</span></div>
+            <div className="console-empty"><TerminalSquare size={26} /><strong>{controlsEnabled ? 'No run selected' : 'No synthetic run selected'}</strong><span>{controlsEnabled ? 'Execute a gate to capture bounded output.' : 'Use the Mission workflow to process a sample; real gate execution stays private.'}</span></div>
           )}
           {snapshot.runs.length > 1 && (
             <div className="run-tabs">
@@ -1402,7 +1402,7 @@ function GuidePanel({ snapshot, setView, onClose }: { snapshot: Snapshot; setVie
     <Modal onClose={onClose} label="Mission Control orientation" className="modal--guide">
       <div className="guide-panel">
         <header className="guide-panel__header">
-          <span className="eyebrow"><BookOpen size={13} /> FIELD GUIDE / {demo ? 'PUBLIC SHOWCASE' : 'SECURE WORKSPACE'}</span>
+          <span className="eyebrow"><BookOpen size={13} /> PRODUCT TOUR / {demo ? 'PUBLIC SHOWCASE' : 'SECURE WORKSPACE'}</span>
           <h2>Know what you are seeing.<br /><em>Know what to do next.</em></h2>
           <p>{demo ? 'A five-step orientation to the AEGIS proof model. The guided mission is interactive and browser-contained; real controls, target contact, uploads and customer data remain removed.' : 'A five-step operating path for a new workspace user. Scope first, act through policy, and verify every outcome.'}</p>
         </header>
@@ -1469,7 +1469,7 @@ function ViewPanel({ scale, density, fullscreen, onScale, onDensity, onFullscree
           <button type="button" className="button button--quiet" onClick={onFullscreen}><Maximize2 size={15} />{fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}</button>
           <button type="button" className="button button--quiet" onClick={onReset}><RotateCcw size={15} />Reset view</button>
         </div>
-        <div className="view-shortcuts"><span>KEYBOARD</span><div><kbd>Ctrl</kbd><b>K</b><span>Commands</span><kbd>?</kbd><b>—</b><span>Guide</span></div><p>Browser zoom shortcuts remain controlled by your browser.</p></div>
+        <div className="view-shortcuts"><span>KEYBOARD</span><div><kbd>Ctrl/⌘</kbd><b>K</b><span>Commands</span><kbd>?</kbd><b>—</b><span>Guide</span></div><p>Browser zoom shortcuts remain controlled by your browser.</p></div>
       </div>
     </Modal>
   )
@@ -1485,7 +1485,7 @@ function CommandDeck({ setView, runGate, onClose, busy, controlsEnabled }: { set
         <div className="command-list">
           <button type="button" onClick={() => go('engagements')}><Target size={17} /><span><strong>Open engagement workspace</strong><small>Scope a site, build, client or repeat assessment</small></span><kbd>00</kbd></button>
           <button type="button" disabled={busy || !controlsEnabled} onClick={() => { runGate('all'); onClose() }}><Play size={17} /><span><strong>{controlsEnabled ? 'Run all engineering gates' : 'Controls unavailable in demo'}</strong><small>{controlsEnabled ? 'Execute the authoritative manifest' : 'Use the private operator console'}</small></span><kbd>01</kbd></button>
-          <button type="button" onClick={() => go('gates')}><ShieldCheck size={17} /><span><strong>Open verification matrix</strong><small>Run or inspect individual gates</small></span><kbd>02</kbd></button>
+          <button type="button" onClick={() => go('gates')}><ShieldCheck size={17} /><span><strong>Open verification matrix</strong><small>{controlsEnabled ? 'Run or inspect individual gates' : 'Inspect modeled synthetic gates'}</small></span><kbd>02</kbd></button>
           <button type="button" onClick={() => go('agents')}><Bot size={17} /><span><strong>Inspect active agents</strong><small>See bounded local journal status</small></span><kbd>03</kbd></button>
           <button type="button" onClick={() => go('evidence')}><Fingerprint size={17} /><span><strong>Verify evidence chains</strong><small>Readiness and action provenance</small></span><kbd>04</kbd></button>
           <button type="button" onClick={() => go('shadow')}><ShieldAlert size={17} /><span><strong>Open Shadow AI defense</strong><small>Inventory, policy, egress, and violations</small></span><kbd>05</kbd></button>

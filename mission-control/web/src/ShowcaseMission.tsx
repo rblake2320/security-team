@@ -71,7 +71,7 @@ const scenarios: DemoScenario[] = [
     detail: 'Challenge a synthetic product before customers or production data arrive.',
     target: 'launch-preview.example',
     targetKind: 'Staging application + API',
-    objective: 'Prove the release has a defensible identity boundary, recoverable data path, controlled AI use and client-ready evidence.',
+    objective: 'Demonstrate how a release can be checked for identity boundaries, recoverability and controlled AI use using synthetic demo evidence.',
     baselineScore: 64,
     remediatedScore: 91,
     icon: ClipboardCheck,
@@ -179,7 +179,7 @@ export function ShowcaseQuickstart({ onStart }: { onStart: () => void }) {
   return (
     <section className="demo-quickstart" aria-labelledby="demo-quickstart-title">
       <div className="demo-quickstart__intro">
-        <span><Play size={12} fill="currentColor" /> INTERACTIVE PUBLIC MISSION</span>
+        <span><Play size={12} fill="currentColor" /> MISSION WORKFLOW / 4 STEPS</span>
         <h2 id="demo-quickstart-title">Do the work. Don’t just tour the screens.</h2>
         <p>Choose a safe scenario, add sample or browser-only input metadata, watch seven teams process it, then compare and export the proof package.</p>
       </div>
@@ -263,13 +263,15 @@ export default function ShowcaseMission() {
   const score = runNumber >= 2 ? scenario.remediatedScore : scenario.baselineScore
   const exportPayload = {
     classification: 'PUBLIC_SYNTHETIC_DEMONSTRATION',
+    artifactType: 'DEMO_EVIDENCE',
+    watermark: 'DEMO EVIDENCE — SYNTHETIC — NOT FOR AUDIT OR CLIENT DELIVERY',
     generatedAt: new Date().toISOString(),
     product: 'AEGIS Mission Control',
     boundary: {
       realTargetContacted: false,
       fileContentUploaded: false,
       serverMutationPerformed: false,
-      note: 'This package demonstrates the workflow. It is not a real security assessment.',
+      note: 'Demo evidence only. This package is not a real security assessment, audit record or client deliverable.',
     },
     engagement: {
       scenario: scenario.title,
@@ -285,9 +287,11 @@ export default function ShowcaseMission() {
     comparison: runNumber >= 2 ? { resolved: 2, persistent: 1, introduced: 0, scoreChange: scenario.remediatedScore - scenario.baselineScore } : null,
   }
   const markdown = [
-    '# AEGIS Synthetic Mission Report',
+    '# AEGIS Demo Evidence Report',
     '',
-    '> PUBLIC SYNTHETIC DEMONSTRATION — no real target contacted and no file content uploaded.',
+    '> DEMO EVIDENCE — SYNTHETIC — NOT FOR AUDIT OR CLIENT DELIVERY',
+    '>',
+    '> No real target was contacted and no file content was uploaded.',
     '',
     `## ${scenario.title}`,
     '',
@@ -408,14 +412,14 @@ export default function ShowcaseMission() {
               <span>WHAT YOU CAN DO NEXT</span>
               <article><ClipboardCheck size={18} /><div><strong>Assign remediation</strong><p>Turn findings into owned work with severity, evidence and acceptance criteria.</p></div></article>
               <article><GitCompareArrows size={18} /><div><strong>Rerun and compare</strong><p>Prove which findings resolved, persisted or appeared after a change.</p></div></article>
-              <article><Download size={18} /><div><strong>Export the record</strong><p>Save a client-ready package for delivery, audit or later comparison.</p></div></article>
+              <article><Download size={18} /><div><strong>Export demo evidence</strong><p>Save a synthetic walkthrough package for demonstration or later comparison. It is not audit evidence or a client deliverable.</p></div></article>
             </div>
           </div>
           <footer className="showcase-result-actions">
             <button type="button" className="button button--quiet" onClick={reset}><RefreshCw size={15} /> Start another mission</button>
             {runNumber < 2 && <button type="button" className="button button--primary" onClick={beginRun}><GitCompareArrows size={15} /> Apply sample fixes + rerun</button>}
-            <a className="button button--quiet" href={payloadUrl(exportPayload)} download={`aegis-${scenario.id}-synthetic-evidence.json`}><Download size={15} /> Export evidence JSON</a>
-            <a className="button button--quiet" href={markdownUrl(markdown)} download={`aegis-${scenario.id}-synthetic-report.md`}><Download size={15} /> Export report</a>
+            <a className="button button--quiet" href={payloadUrl(exportPayload)} download={`aegis-${scenario.id}-demo-evidence.json`}><Download size={15} /> Download demo evidence JSON</a>
+            <a className="button button--quiet" href={markdownUrl(markdown)} download={`aegis-${scenario.id}-demo-report.md`}><Download size={15} /> Download demo report</a>
           </footer>
           <div className="showcase-disclaimer"><AlertTriangle size={14} /><span><strong>Demonstration boundary:</strong> this output is synthetic and is not an assessment of any real system. Real work runs only in an isolated, authenticated customer workspace with recorded authority and governed connectors.</span></div>
         </section>

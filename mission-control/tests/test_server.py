@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import http.client
+import json
 import sys
 import tempfile
 import threading
@@ -77,7 +78,8 @@ class MissionControlContractTests(unittest.TestCase):
     def test_missing_static_assets_never_fall_back_to_the_spa_shell(self) -> None:
         self.assertFalse(server.allows_spa_fallback("assets/index.js.map"))
         self.assertFalse(server.allows_spa_fallback("security.txt"))
-        self.assertTrue(server.allows_spa_fallback("evidence"))
+        self.assertFalse(server.allows_spa_fallback("evidence"))
+        self.assertTrue(server.allows_spa_fallback("index.html"))
 
 
 class ShowcaseHTTPBoundaryTests(unittest.TestCase):
@@ -131,6 +133,13 @@ class ShowcaseHTTPBoundaryTests(unittest.TestCase):
 
         self.assertEqual(self.request("GET", "/api/health")[0], 200)
         self.assertEqual(self.request("GET", "/api/snapshot")[0], 200)
+
+    def test_unknown_extensionless_server_path_is_a_real_404(self) -> None:
+        status, headers, body = self.request("GET", "/definitely-not-a-route")
+        self.assertEqual(status, 404)
+        self.assertEqual(headers["Content-Type"], "application/json; charset=utf-8")
+        self.assertEqual(headers["Cache-Control"], "no-store")
+        self.assertEqual(json.loads(body), {"error": "not found"})
 
     def test_demo_control_post_fails_before_gate_validation(self) -> None:
         status, _headers, _body = self.request(

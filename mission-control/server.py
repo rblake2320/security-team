@@ -66,8 +66,8 @@ def bounded(value: Any, limit: int = 1200) -> str:
 
 
 def allows_spa_fallback(relative_path: str) -> bool:
-    """Only extensionless application routes may receive the SPA shell."""
-    return not relative_path.startswith("assets/") and not Path(relative_path).suffix
+    """Hash routing needs only the root document; missing server paths are real 404s."""
+    return relative_path in {"", "index.html"}
 
 
 def run_process(argv: list[str], cwd: Path, timeout: float = 8.0) -> tuple[int, str]:

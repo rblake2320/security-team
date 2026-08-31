@@ -100,18 +100,28 @@ def run_journey(base_url: str) -> None:
         assert "3 findings" in page.locator(".showcase-result-seal").inner_text()
 
         with page.expect_download() as download_info:
-            page.get_by_role("link", name="Export evidence JSON").click()
+            page.get_by_role("link", name="Download demo evidence JSON").click()
         download = download_info.value
-        assert download.suggested_filename == "aegis-prelaunch-synthetic-evidence.json"
+        assert download.suggested_filename == "aegis-prelaunch-demo-evidence.json"
         payload = json.loads(Path(download.path()).read_text(encoding="utf-8"))
         assert payload["classification"] == "PUBLIC_SYNTHETIC_DEMONSTRATION"
+        assert payload["artifactType"] == "DEMO_EVIDENCE"
+        assert payload["watermark"] == "DEMO EVIDENCE — SYNTHETIC — NOT FOR AUDIT OR CLIENT DELIVERY"
         assert payload["boundary"] == {
             "realTargetContacted": False,
             "fileContentUploaded": False,
             "serverMutationPerformed": False,
-            "note": "This package demonstrates the workflow. It is not a real security assessment.",
+            "note": "Demo evidence only. This package is not a real security assessment, audit record or client deliverable.",
         }
         assert len(payload["teams"]) == 7 and len(payload["findings"]) == 3
+
+        with page.expect_download() as report_download_info:
+            page.get_by_role("link", name="Download demo report").click()
+        report_download = report_download_info.value
+        assert report_download.suggested_filename == "aegis-prelaunch-demo-report.md"
+        report = Path(report_download.path()).read_text(encoding="utf-8")
+        assert "DEMO EVIDENCE — SYNTHETIC — NOT FOR AUDIT OR CLIENT DELIVERY" in report
+        assert "client-ready" not in page.locator(".showcase-workspace").inner_text().lower()
 
         page.get_by_role("button", name="Apply sample fixes + rerun").click()
         page.get_by_role("heading", name="Seven teams are processing the mission.", level=2).wait_for()
@@ -137,7 +147,7 @@ def run_journey(base_url: str) -> None:
         phone.get_by_role("button", name="Add prepared sample inputs").click()
         phone.get_by_role("button", name="Begin seven-team simulation").click()
         phone.get_by_role("heading", name="Mission results are ready to use.", level=2).wait_for(timeout=6_000)
-        assert phone.get_by_role("link", name="Export report").is_visible()
+        assert phone.get_by_role("link", name="Download demo report").is_visible()
         assert_no_horizontal_clip(phone, "mobile public journey")
         phone.screenshot(path=ARTIFACTS / "interactive-showcase-mobile.png", full_page=False)
         mobile.close()
@@ -183,6 +193,7 @@ def main() -> int:
         "SHOWCASE_SEVEN_TEAM_PROCESSING=PASS",
         "SHOWCASE_RERUN_COMPARISON=PASS",
         "SHOWCASE_EXPORT_DOWNLOAD=PASS",
+        "SHOWCASE_DEMO_EVIDENCE_WATERMARK=PASS",
         "SHOWCASE_ZERO_NETWORK_MUTATIONS=PASS",
         "SHOWCASE_RESPONSIVE_JOURNEY=PASS",
     ):

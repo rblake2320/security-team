@@ -13,7 +13,20 @@ DEPLOY_ROOT = MISSION_ROOT / "deploy" / "vps"
 
 
 def main() -> int:
-    assert (DIST / "index.html").is_file(), "showcase build is missing web/dist/index.html"
+    index_path = DIST / "index.html"
+    assert index_path.is_file(), "showcase build is missing web/dist/index.html"
+    index_html = index_path.read_text(encoding="utf-8")
+    for expected in (
+        'rel="canonical" href="https://showcase.aihangout.ai/"',
+        'property="og:title"',
+        'property="og:description"',
+        'property="og:url"',
+        'name="twitter:card"',
+        'name="twitter:title"',
+        'name="twitter:description"',
+    ):
+        assert expected in index_html, f"showcase sharing metadata is missing {expected}"
+    assert "__AEGIS_" not in index_html, "showcase metadata placeholders were not resolved"
     profile = DIST / "aegis-build-profile.txt"
     assert profile.is_file() and profile.read_text(encoding="utf-8").strip() == "showcase", (
         "showcase build profile receipt is missing or incorrect"
@@ -43,6 +56,7 @@ def main() -> int:
     print("SHOWCASE_PRIVATE_ROUTES=PASS")
     print("SHOWCASE_SNAPSHOT_ONLY=PASS")
     print("SHOWCASE_IMAGE_ISOLATION=PASS")
+    print("SHOWCASE_SOCIAL_METADATA=PASS")
     return 0
 
 
