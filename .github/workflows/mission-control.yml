@@ -116,11 +116,12 @@ jobs:
           image='postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685'
           network="aegis-recovery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           db_container="aegis-recovery-db-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
-          backup_dir="$RUNNER_TEMP/aegis-recovery-backups"
+          backup_volume="aegis-recovery-backup-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
           evidence_dir="$RUNNER_TEMP/aegis-recovery-evidence"
-          mkdir -p "$backup_dir" "$evidence_dir"
+          mkdir -p "$evidence_dir"
           printf 'synthetic encrypted evidence payload\n' > "$evidence_dir/sample.aegis"
           docker network create "$network" >/dev/null
+          docker volume create "$backup_volume" >/dev/null
           docker run --detach --rm --name "$db_container" --network "$network" --network-alias db \
             --env POSTGRES_DB=aegis_recovery_ci \
             --env POSTGRES_USER=aegis_admin \
@@ -129,6 +130,7 @@ jobs:
           cleanup() {
             docker rm --force "$db_container" >/dev/null 2>&1 || true
             docker network rm "$network" >/dev/null 2>&1 || true
+            docker volume rm "$backup_volume" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
           database_ready=0
@@ -147,7 +149,7 @@ jobs:
             --env POSTGRES_DB=aegis_recovery_ci \
             --env POSTGRES_USER=aegis_admin \
             --env POSTGRES_PASSWORD=ci-only-recovery-password \
-            --volume "$backup_dir:/var/backups/aegis")
+            --volume "$backup_volume:/var/backups/aegis")
           docker run "${common[@]}" \
             --volume "$evidence_dir:/var/lib/aegis/evidence:ro" \
             --volume "$PWD/mission-control/deploy/vps/backup.sh:/opt/aegis/backup.sh:ro" \
@@ -156,9 +158,10 @@ jobs:
             --env RESTORE_DRILL_DATABASE=aegis_ci_restore_drill \
             --volume "$PWD/mission-control/deploy/vps/restore-drill.sh:/opt/aegis/restore-drill.sh:ro" \
             --entrypoint /bin/sh "$image" /opt/aegis/restore-drill.sh
-          test -n "$(find "$backup_dir/restore-receipts" -maxdepth 1 -type f -name '*.json' -print -quit)"
           test -z "$(docker exec "$db_container" psql --username aegis_admin --dbname postgres --no-align --tuples-only --command \"SELECT datname FROM pg_database WHERE datname = 'aegis_ci_restore_drill'\")"
-          python -c "import glob,json; p=glob.glob(r'$backup_dir/restore-receipts/*.json'); d=json.load(open(p[0], encoding='utf-8')); assert d['status']=='passed' and d['rowCountsVerified'] and d['disposableDatabaseDropped']"
+          docker run --rm --volume "$backup_volume:/data:ro" --entrypoint sh "$image" -c \
+            'receipt="$(find /data/restore-receipts -maxdepth 1 -type f -name "*.json" -print -quit)"; test -n "$receipt"; cat "$receipt"' \
+            | python -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='passed' and d['rowCountsVerified'] and d['disposableDatabaseDropped']"
 
       - name: Build production image
         run: docker build --pull --tag aegis-mission-control:ci ./mission-control
