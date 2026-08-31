@@ -13,7 +13,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
 WORKDIR /app
-RUN groupadd --system aegis && useradd --system --gid aegis --home-dir /app aegis
+RUN DEBIAN_FRONTEND=noninteractive apt-get update \
+    && apt-get upgrade --yes --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system aegis \
+    && useradd --system --gid aegis --home-dir /app aegis
 COPY requirements.lock ./
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 COPY aegis_platform/ ./aegis_platform/

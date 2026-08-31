@@ -158,7 +158,16 @@ npm run typecheck
 npm run build
 ```
 
-Also require dependency/container/secret scans, an SBOM, signed image provenance, Cloudflare policy review, backup receipt, recent restore evidence, and responsive/keyboard UI checks. Monitor health, error rates, denied authorization, connector freshness, telemetry gaps, approval age, audit-chain state, evidence-scan backlog, backup age, and open Shadow AI violations.
+CI generates a populated SPDX 2.3 SBOM for the exact operator image, checks its
+revision label against the Git commit, and fails on fixed-available HIGH or
+CRITICAL container vulnerabilities. The SBOM, machine-readable vulnerability
+report, hashes, image ID, and receipt are retained as a workflow artifact.
+
+Also require secret scans, signed image provenance and admission verification,
+Cloudflare policy review, backup receipt, recent restore evidence, and
+responsive/keyboard UI checks. Monitor health, error rates, denied authorization,
+connector freshness, telemetry gaps, approval age, audit-chain state,
+evidence-scan backlog, backup age, and open Shadow AI violations.
 
 The CI container job starts the same digest-pinned ClamAV image used in production
 and proves both a clean verdict and EICAR rejection through the application scanner

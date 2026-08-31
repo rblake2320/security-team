@@ -169,5 +169,42 @@ class CiReachabilityTests(unittest.TestCase):
         self.assertEqual(unpinned, [], f"external actions are not commit-pinned: {unpinned}")
 
 
+class MissionControlSupplyChainTests(unittest.TestCase):
+    """The AEGIS image gate must stay reachable, fail closed, and immutable."""
+
+    def setUp(self) -> None:
+        root = repo_root()
+        if root is None:
+            self.skipTest("not a git repository")
+        self.workflow = (
+            root / ".github" / "workflows" / "mission-control.yml"
+        ).read_text(encoding="utf-8")
+
+    def test_container_scanner_reference_is_digest_pinned(self):
+        references = re.findall(r"aquasec/trivy@([^\s]+)", self.workflow)
+        self.assertTrue(references, "Mission Control CI has no Trivy image gate")
+        for reference in references:
+            with self.subTest(reference=reference):
+                self.assertRegex(
+                    reference,
+                    r"^sha256:[0-9a-f]{64}$",
+                    "the container scanner must be pinned to an immutable OCI digest",
+                )
+
+    def test_exact_image_sbom_and_vulnerability_gate_are_fail_closed(self):
+        required = (
+            "--format spdx-json",
+            "--severity HIGH,CRITICAL",
+            "--exit-code 1",
+            "--build-arg AEGIS_COMMIT=",
+            "org.opencontainers.image.revision",
+            "RECEIPT.json",
+            "actions/upload-artifact@",
+        )
+        for marker in required:
+            with self.subTest(marker=marker):
+                self.assertIn(marker, self.workflow)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

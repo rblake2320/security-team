@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+env:
+  # Trivy 0.74.0, pinned to the official multi-platform OCI digest.
+  TRIVY_IMAGE: aquasec/trivy@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+
 concurrency:
   group: mission-control-${{ github.ref }}
   cancel-in-progress: true
@@ -164,7 +168,105 @@ jobs:
             | python -c "import json,sys; d=json.load(sys.stdin); assert d['status']=='passed' and d['rowCountsVerified'] and d['disposableDatabaseDropped']"
 
       - name: Build production image
-        run: docker build --pull --tag aegis-mission-control:ci ./mission-control
+        run: docker build --pull --build-arg AEGIS_COMMIT="$GITHUB_SHA" --tag aegis-mission-control:ci ./mission-control
+
+      - name: Generate SBOM and gate container vulnerabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          report_dir="$RUNNER_TEMP/aegis-container-security"
+          mkdir -p "$report_dir"
+          docker run --rm \
+            --volume /var/run/docker.sock:/var/run/docker.sock \
+            --volume "$report_dir:/reports" \
+            "$TRIVY_IMAGE" image \
+            --format spdx-json \
+            --output /reports/aegis-mission-control.spdx.json \
+            --no-progress \
+            aegis-mission-control:ci
+          docker run --rm \
+            --volume /var/run/docker.sock:/var/run/docker.sock \
+            --volume "$report_dir:/reports" \
+            "$TRIVY_IMAGE" image \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --format json \
+            --output /reports/aegis-mission-control-vulnerabilities.json \
+            --no-progress \
+            aegis-mission-control:ci
+          python - "$report_dir" "$GITHUB_SHA" <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import subprocess
+          import sys
+
+          report_dir = pathlib.Path(sys.argv[1])
+          commit = sys.argv[2]
+          sbom_path = report_dir / "aegis-mission-control.spdx.json"
+          vulnerability_path = report_dir / "aegis-mission-control-vulnerabilities.json"
+          sbom = json.loads(sbom_path.read_text(encoding="utf-8"))
+          vulnerabilities = json.loads(vulnerability_path.read_text(encoding="utf-8"))
+          if sbom.get("spdxVersion") != "SPDX-2.3" or not sbom.get("packages"):
+              raise SystemExit("Trivy did not produce a populated SPDX 2.3 SBOM")
+          actionable = [
+              finding
+              for result in vulnerabilities.get("Results") or []
+              for finding in result.get("Vulnerabilities") or []
+              if finding.get("Severity") in {"HIGH", "CRITICAL"}
+          ]
+          if actionable:
+              raise SystemExit(f"container scan retained {len(actionable)} high/critical findings")
+          image_id = subprocess.check_output(
+              ["docker", "image", "inspect", "aegis-mission-control:ci", "--format", "{{.Id}}"],
+              text=True,
+          ).strip()
+          revision = subprocess.check_output(
+              [
+                  "docker",
+                  "image",
+                  "inspect",
+                  "aegis-mission-control:ci",
+                  "--format",
+                  "{{index .Config.Labels \"org.opencontainers.image.revision\"}}",
+              ],
+              text=True,
+          ).strip()
+          if revision != commit:
+              raise SystemExit(f"image revision {revision!r} does not match commit {commit!r}")
+          files = {}
+          for path in (sbom_path, vulnerability_path):
+              files[path.name] = {
+                  "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                  "bytes": path.stat().st_size,
+              }
+          receipt = {
+              "schemaVersion": 1,
+              "commit": commit,
+              "image": "aegis-mission-control:ci",
+              "imageId": image_id,
+              "revisionLabel": revision,
+              "scanner": "trivy-0.74.0",
+              "policy": "no fixed-available HIGH or CRITICAL vulnerabilities",
+              "status": "passed",
+              "files": files,
+          }
+          (report_dir / "RECEIPT.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload container security evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7, node24
+        with:
+          name: aegis-container-security-${{ github.sha }}
+          path: ${{ runner.temp }}/aegis-container-security
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Verify real ClamAV evidence scanning
         shell: bash
