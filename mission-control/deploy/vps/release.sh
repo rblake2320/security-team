@@ -103,6 +103,12 @@ docker compose --env-file .env.showcase -f compose.showcase.yml config --quiet
 AEGIS_IMAGE_TAG="$release_tag" AEGIS_COMMIT="$release_commit" docker compose --env-file .env.production -f compose.production.yml build --pull app
 AEGIS_IMAGE_TAG="$release_tag" AEGIS_COMMIT="$release_commit" docker compose --env-file .env.showcase -f compose.showcase.yml build --pull showcase
 
+# Refuse a release unless the current production data can be backed up and
+# restored into an isolated disposable database with exact logical parity.
+docker compose --env-file .env.production -f compose.production.yml --profile maintenance run --rm backup
+docker compose --env-file .env.production -f compose.production.yml --profile maintenance run --rm \
+  -e RESTORE_DRILL_DATABASE=aegis_release_restore_drill restore-drill
+
 # Warm the private malware scanner before switching releases. The bounded
 # seven-minute allowance covers first-run signature initialization.
 docker compose --env-file .env.production -f compose.production.yml up --detach clamav
@@ -141,6 +147,12 @@ revision_expected="$(docker compose --env-file .env.production -f compose.produc
 [ "$revision_after" = "$revision_expected" ] || fail "database did not reach the reviewed migration head"
 
 switched=0
+install -m 0644 aegis-backup.service /etc/systemd/system/aegis-backup.service
+install -m 0644 aegis-backup.timer /etc/systemd/system/aegis-backup.timer
+install -m 0644 aegis-restore-drill.service /etc/systemd/system/aegis-restore-drill.service
+install -m 0644 aegis-restore-drill.timer /etc/systemd/system/aegis-restore-drill.timer
+systemctl daemon-reload
+systemctl enable --now aegis-backup.timer aegis-restore-drill.timer
 printf 'PRODUCTION_APP=HEALTHY\n'
 printf 'EVIDENCE_SCANNER=HEALTHY\n'
 printf 'PUBLIC_SHOWCASE=HEALTHY\n'

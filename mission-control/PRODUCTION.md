@@ -110,9 +110,18 @@ Run a first backup:
 docker compose --env-file .env.production -f compose.production.yml --profile maintenance run --rm backup
 ```
 
-The backup bundle contains a PostgreSQL custom-format dump, encrypted evidence directory, checksums, and a completion receipt. Copy backup bundles to off-VPS immutable storage with independent credentials and lifecycle policy. A local VPS volume is not a disaster-recovery backup.
+The backup bundle contains a PostgreSQL custom-format dump, encrypted evidence directory, exact per-table row counts, checksums, and a completion receipt. Copy backup bundles to off-VPS immutable storage with independent credentials and lifecycle policy. A local VPS volume is not a disaster-recovery backup.
 
-Schedule the one-shot backup command daily. At least monthly, restore the latest bundle into a separately named disposable database ending in `_restore_drill`, validate record counts and evidence decryption, record measured recovery time/data loss, and destroy only that verified drill database afterward.
+The shipped systemd units run the backup daily and an isolated restore drill monthly. Every release also creates a fresh backup and refuses deployment unless it restores with exact per-table parity. The drill validates bundle checksums and the encrypted-evidence archive, measures backup age and restore time, drops the disposable database, and writes a JSON receipt under `restore-receipts/`. It never treats the drill database as production.
+
+Run a manual drill against the latest completed bundle:
+
+```bash
+docker compose --env-file .env.production -f compose.production.yml --profile maintenance run --rm \
+  -e RESTORE_DRILL_DATABASE=aegis_manual_restore_drill restore-drill
+```
+
+The encrypted evidence payload remains opaque during this infrastructure drill. Separately exercise application-level evidence decryption through the private operator path with the production key authority; never copy the key into a backup receipt or off-site bundle.
 
 Do not interpret the presence of a dump file as proof of recoverability.
 

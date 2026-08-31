@@ -104,7 +104,57 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7, node24
 
       - name: Validate release automation
-        run: bash -n mission-control/deploy/vps/release.sh
+        run: |
+          bash -n mission-control/deploy/vps/release.sh
+          sh -n mission-control/deploy/vps/backup.sh
+          sh -n mission-control/deploy/vps/restore-drill.sh
+
+      - name: Prove backup and isolated restore automation
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685'
+          network="aegis-recovery-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          db_container="aegis-recovery-db-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          backup_dir="$RUNNER_TEMP/aegis-recovery-backups"
+          evidence_dir="$RUNNER_TEMP/aegis-recovery-evidence"
+          mkdir -p "$backup_dir" "$evidence_dir"
+          printf 'synthetic encrypted evidence payload\n' > "$evidence_dir/sample.aegis"
+          docker network create "$network" >/dev/null
+          docker run --detach --rm --name "$db_container" --network "$network" --network-alias db \
+            --env POSTGRES_DB=aegis_recovery_ci \
+            --env POSTGRES_USER=aegis_admin \
+            --env POSTGRES_PASSWORD=ci-only-recovery-password \
+            "$image" >/dev/null
+          cleanup() {
+            docker rm --force "$db_container" >/dev/null 2>&1 || true
+            docker network rm "$network" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for _ in $(seq 1 45); do
+            if docker exec "$db_container" pg_isready --username aegis_admin --dbname aegis_recovery_ci >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec "$db_container" psql --username aegis_admin --dbname aegis_recovery_ci --set ON_ERROR_STOP=1 \
+            --command 'CREATE TABLE organizations (id text PRIMARY KEY, name text NOT NULL); INSERT INTO organizations VALUES ('\''tenant-a'\'', '\''Synthetic tenant'\'');'
+          common=(--rm --network "$network" \
+            --env POSTGRES_DB=aegis_recovery_ci \
+            --env POSTGRES_USER=aegis_admin \
+            --env POSTGRES_PASSWORD=ci-only-recovery-password \
+            --volume "$backup_dir:/var/backups/aegis")
+          docker run "${common[@]}" \
+            --volume "$evidence_dir:/var/lib/aegis/evidence:ro" \
+            --volume "$PWD/mission-control/deploy/vps/backup.sh:/opt/aegis/backup.sh:ro" \
+            --entrypoint /opt/aegis/backup.sh "$image"
+          docker run "${common[@]}" \
+            --env RESTORE_DRILL_DATABASE=aegis_ci_restore_drill \
+            --volume "$PWD/mission-control/deploy/vps/restore-drill.sh:/opt/aegis/restore-drill.sh:ro" \
+            --entrypoint /opt/aegis/restore-drill.sh "$image"
+          test -n "$(find "$backup_dir/restore-receipts" -maxdepth 1 -type f -name '*.json' -print -quit)"
+          test -z "$(docker exec "$db_container" psql --username aegis_admin --dbname postgres --no-align --tuples-only --command \"SELECT datname FROM pg_database WHERE datname = 'aegis_ci_restore_drill'\")"
+          python -c "import glob,json; p=glob.glob(r'$backup_dir/restore-receipts/*.json'); d=json.load(open(p[0], encoding='utf-8')); assert d['status']=='passed' and d['rowCountsVerified'] and d['disposableDatabaseDropped']"
 
       - name: Build production image
         run: docker build --pull --tag aegis-mission-control:ci ./mission-control
