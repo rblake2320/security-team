@@ -16,6 +16,7 @@ These tests make both conditions checkable rather than assumed.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import unittest
 from pathlib import Path
@@ -147,6 +148,25 @@ class CiReachabilityTests(unittest.TestCase):
         for needed in ("claim_check.py", "test_ci_integrity", "unittest"):
             with self.subTest(invokes=needed):
                 self.assertIn(needed, text)
+
+    def test_external_github_actions_are_pinned_to_full_commits(self):
+        """A mutable action tag can silently change executable CI code."""
+        root = repo_root()
+        if root is None:
+            self.skipTest("not a git repository")
+        workflow_root = root / ".github" / "workflows"
+        workflows = sorted(workflow_root.glob("*.yml")) + sorted(workflow_root.glob("*.yaml"))
+        self.assertTrue(workflows, "repository has no reachable workflows")
+        unpinned: list[str] = []
+        for workflow in workflows:
+            text = workflow.read_text(encoding="utf-8")
+            for action, reference in re.findall(
+                r"(?m)^\s*-?\s*uses:\s*([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@([^\s#]+)",
+                text,
+            ):
+                if not re.fullmatch(r"[0-9a-f]{40}", reference):
+                    unpinned.append(f"{workflow.name}: {action}@{reference}")
+        self.assertEqual(unpinned, [], f"external actions are not commit-pinned: {unpinned}")
 
 
 if __name__ == "__main__":
