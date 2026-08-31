@@ -39,7 +39,14 @@ class CheckTests(unittest.TestCase):
     def test_dns_rebinding_to_public_is_blocked_at_execution(self, resolve):
         resolve.return_value = ("example.test", 80, ("93.184.216.34",))
         context = ExecutionContext(Limits(), Path("missing-stop"), allow_public_targets=False)
-        with self.assertRaisesRegex(ScopeError, "out of approved scope"):
+        with self.assertRaisesRegex(ScopeError, "public target denied"):
+            HttpHeadersCheck().run(Target(TargetKind.URL, "http://example.test"), context)
+
+    @patch("aegis_rt.checks.http_headers.resolve_url_target")
+    def test_public_authorization_cannot_rebind_to_private_at_execution(self, resolve):
+        resolve.return_value = ("example.test", 80, ("127.0.0.1",))
+        context = ExecutionContext(Limits(), Path("missing-stop"), allow_public_targets=True)
+        with self.assertRaisesRegex(ScopeError, "possible DNS rebinding"):
             HttpHeadersCheck().run(Target(TargetKind.URL, "http://example.test"), context)
 
     def test_source_link_escape_is_rejected(self):

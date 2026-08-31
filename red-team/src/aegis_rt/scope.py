@@ -81,6 +81,31 @@ def is_public_address(value: str) -> bool:
     )
 
 
+def select_scoped_address(addresses: tuple[str, ...], *, allow_public_targets: bool) -> str:
+    """Select one already-resolved address without crossing network trust classes.
+
+    Public and private targets are separate authorization modes. A public engagement
+    must resolve exclusively to public addresses; otherwise DNS can turn a signed
+    public hostname into an SSRF path to a private service. A private/lab engagement
+    continues to reject every public address. Mixed answers fail closed in both modes.
+    """
+    if not addresses:
+        raise ScopeError("hostname resolved to no addresses")
+    public = tuple(address for address in addresses if is_public_address(address))
+    restricted = tuple(address for address in addresses if not is_public_address(address))
+    if allow_public_targets:
+        if restricted:
+            raise ScopeError(
+                "public target resolved to a private or restricted address; refusing possible DNS rebinding"
+            )
+        return public[0]
+    if public:
+        raise ScopeError(
+            "public target denied by approved scope: " + ", ".join(public)
+        )
+    return restricted[0]
+
+
 def validate_target(target: Target, allow_public: bool = False) -> None:
     if target.kind == TargetKind.PATH:
         path = Path(target.value).expanduser().resolve()
@@ -91,11 +116,7 @@ def validate_target(target: Target, allow_public: bool = False) -> None:
         return
 
     _, _, addresses = resolve_url_target(target.value)
-    public = [address for address in addresses if is_public_address(address)]
-    if public and not allow_public:
-        raise ScopeError(
-            "public target denied by default; authorization must explicitly allow it: " + ", ".join(public)
-        )
+    select_scoped_address(addresses, allow_public_targets=allow_public)
 
 
 def validate_engagement(engagement: Engagement, require_authorization: bool) -> None:

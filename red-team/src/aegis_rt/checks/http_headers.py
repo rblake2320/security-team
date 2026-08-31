@@ -1,33 +1,14 @@
 from __future__ import annotations
 
 import http.client
-import socket
 import ssl
 from typing import ClassVar
 from urllib.parse import urlsplit
 
 from ..models import CheckResult, Finding, Severity, Target, TargetKind
-from ..scope import ScopeError, is_public_address, resolve_url_target
+from ..scope import resolve_url_target, select_scoped_address
+from ._pinned_http import connection_for
 from .base import ExecutionContext
-
-
-class _PinnedHTTPConnection(http.client.HTTPConnection):
-    def __init__(self, hostname: str, address: str, port: int, timeout: float):
-        super().__init__(hostname, port, timeout=timeout)
-        self._address = address
-
-    def connect(self) -> None:
-        self.sock = socket.create_connection((self._address, self.port), self.timeout, self.source_address)
-
-
-class _PinnedHTTPSConnection(http.client.HTTPSConnection):
-    def __init__(self, hostname: str, address: str, port: int, timeout: float):
-        super().__init__(hostname, port, timeout=timeout, context=ssl.create_default_context())
-        self._address = address
-
-    def connect(self) -> None:
-        raw = socket.create_connection((self._address, self.port), self.timeout, self.source_address)
-        self.sock = self._context.wrap_socket(raw, server_hostname=self.host)
 
 
 class HttpHeadersCheck:
@@ -46,14 +27,12 @@ class HttpHeadersCheck:
     def run(self, target: Target, context: ExecutionContext) -> CheckResult:
         parsed = urlsplit(target.value)
         hostname, port, addresses = resolve_url_target(target.value)
-        public = [address for address in addresses if is_public_address(address)]
-        if public and not context.allow_public_targets:
-            # Re-check immediately before connecting to close DNS rebinding races.
-            raise ScopeError("target resolved out of approved scope during execution")
-        address = addresses[0]  # Pinned after scope validation; prevents DNS rebinding mid-request.
+        address = select_scoped_address(
+            addresses,
+            allow_public_targets=context.allow_public_targets,
+        )
         context.consume_request()
-        connection_type = _PinnedHTTPSConnection if parsed.scheme == "https" else _PinnedHTTPConnection
-        connection = connection_type(hostname, address, port, context.limits.timeout_seconds)
+        connection = connection_for(parsed.scheme, hostname, address, port, context.limits.timeout_seconds)
         path = parsed.path or "/"
         if parsed.query:
             path += "?" + parsed.query

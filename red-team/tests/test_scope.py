@@ -25,6 +25,45 @@ class ScopeTests(unittest.TestCase):
             validate_engagement(engagement(), require_authorization=False)
 
     @patch("aegis_rt.scope.socket.getaddrinfo")
+    def test_public_authorization_rejects_private_rebinding(self, resolve):
+        resolve.return_value = [(2, 1, 6, "", ("127.0.0.1", 80))]
+        item = engagement()
+        approved = replace(
+            item,
+            authorization=Authorization(
+                "approver",
+                "SEC-PUBLIC-1",
+                (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+                scope_fingerprint(item),
+                "test-signature",
+                allow_public_targets=True,
+            ),
+        )
+        with self.assertRaisesRegex(ScopeError, "possible DNS rebinding"):
+            validate_engagement(approved, require_authorization=True)
+
+    @patch("aegis_rt.scope.socket.getaddrinfo")
+    def test_public_authorization_rejects_mixed_dns_answers(self, resolve):
+        resolve.return_value = [
+            (2, 1, 6, "", ("93.184.216.34", 80)),
+            (2, 1, 6, "", ("127.0.0.1", 80)),
+        ]
+        item = engagement()
+        approved = replace(
+            item,
+            authorization=Authorization(
+                "approver",
+                "SEC-PUBLIC-2",
+                (datetime.now(UTC) + timedelta(hours=1)).isoformat(),
+                scope_fingerprint(item),
+                "test-signature",
+                allow_public_targets=True,
+            ),
+        )
+        with self.assertRaisesRegex(ScopeError, "possible DNS rebinding"):
+            validate_engagement(approved, require_authorization=True)
+
+    @patch("aegis_rt.scope.socket.getaddrinfo")
     def test_authorization_is_bound_to_scope(self, resolve):
         resolve.return_value = [(2, 1, 6, "", ("127.0.0.1", 8080))]
         item = engagement()

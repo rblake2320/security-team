@@ -134,8 +134,10 @@ def _authorize(args: argparse.Namespace) -> int:
         ),
     )
     candidate = replace(engagement, authorization=authorization)
-    if authorization.is_expired():
-        raise ScopeError("authorization expiry must be in the future")
+    # Validate the exact, signed candidate before persisting its receipt. This
+    # prevents an invalid public/private target classification, malformed ticket,
+    # or expired authorization from leaving a misleading signed file behind.
+    validate_engagement(candidate, require_authorization=True)
     data = json.loads(args.engagement.read_text(encoding="utf-8"))
     data["authorization"] = {
         "approved_by": authorization.approved_by,

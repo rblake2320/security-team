@@ -7,7 +7,9 @@ action scoped, rate-limited, stoppable, and auditable.
 ## What is implemented
 
 - Ed25519-signed scope receipts bound to the exact targets, checks, and execution limits.
-- Public network targets denied unless an unexpired authorization explicitly allows them.
+- Public network targets denied unless an unexpired authorization explicitly selects
+  public-target mode. Public mode accepts only exclusively public DNS answers; private,
+  restricted, or mixed answers fail closed to prevent rebinding into internal services.
 - A second scope-fingerprint acknowledgement required at execution time.
 - DNS resolution validation and address-pinned HTTP connections to reduce rebinding risk.
 - TLS certificate verification, no redirect following, request budgets, rate limits,

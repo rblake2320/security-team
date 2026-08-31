@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "LicenseRef-Proprietary"
 authors = [{name = "Security Team"}]
-dependencies = ["cryptography==50.0.0"]
+dependencies = ["cryptography==50.0.0", "pip-audit==2.10.0"]
 
 [project.scripts]
 aegis-rt = "aegis_rt.cli:main"

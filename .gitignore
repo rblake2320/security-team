@@ -54,6 +54,12 @@ dist/
 **/_tmp_*.json
 **/*.tmp
 
+# Red Team engagement receipts can contain signed authorization, local target paths,
+# and owner-specific scope. Only the unsigned red-team/examples/engagement.json
+# template belongs in version control; local engagements and sweep drivers do not.
+/red-team/examples/engagement-*.json
+/red-team/_*.py
+
 # ---------------------------------------------------------------------------
 # PRIVATE / OUT-OF-SCOPE — a leading underscore at the repository root is
 # reserved for local working copies and scratch review areas. These must never
