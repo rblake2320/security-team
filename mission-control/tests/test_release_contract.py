@@ -48,7 +48,13 @@ class ProductionReleaseContractTests(unittest.TestCase):
         self.assertIn("up --detach clamav", release)
         self.assertIn("wait_healthy compose.production.yml .env.production clamav 210", release)
         self.assertIn("EVIDENCE_SCANNER_MODE=clamav", production_env)
-        self.assertIn("python mission-control/tools/verify_clamav.py", workflow)
+        self.assertIn("--entrypoint python", workflow)
+        self.assertIn("mission-control/tools/verify_clamav.py:/tmp/verify_clamav.py:ro", workflow)
+        self.assertIn("--env PYTHONPATH=/app", workflow)
+        self.assertLess(
+            workflow.index("- name: Build production image"),
+            workflow.index("- name: Verify real ClamAV evidence scanning"),
+        )
         self.assertRegex(workflow, r"clamav/clamav:[^\s]+@sha256:[0-9a-f]{64}")
 
 
