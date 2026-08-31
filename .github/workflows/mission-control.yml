@@ -88,6 +88,10 @@ jobs:
         working-directory: mission-control/web
         run: npm run build:showcase
 
+      - name: Interactive public mission regression
+        working-directory: mission-control
+        run: python tools/test_showcase_journey.py
+
       - name: Verify public bundle boundary
         working-directory: mission-control
         run: python tools/test_showcase_bundle.py

@@ -203,7 +203,7 @@ def run_browser_checks(base_url: str) -> None:
         guide.wait_for()
         assert_focus_is_inside(page, guide, "orientation guide")
         assert_focus_trap(page, guide, "orientation guide")
-        assert "synthetic and every control action is removed" in guide.inner_text()
+        assert "interactive and browser-contained" in guide.inner_text()
         for label in (
             "START / COMMAND",
             "SCOPE / ENGAGEMENT",
@@ -219,11 +219,11 @@ def run_browser_checks(base_url: str) -> None:
         assert guide.count() == 0
         assert page.get_by_role("button", name="Evidence").get_attribute("aria-current") == "page"
         page.get_by_role("button", name="Engagements").click()
-        page.get_by_text("Bring the target. Keep the proof.").wait_for()
+        page.get_by_role("heading", name="Run a mission. See what AEGIS produces.", level=1).wait_for()
         assert page.evaluate("window.location.hash") == "#/engagements"
         assert page.locator("main h1").count() == 1
-        assert "without accepting targets" in page.locator(".tenant-only").inner_text()
-        assert float(page.locator(".engagement-template-grid span").first.evaluate("element => parseFloat(getComputedStyle(element).fontSize)")) >= 12
+        assert "Zero real target traffic" in page.locator(".showcase-boundary").inner_text()
+        assert page.get_by_role("button", name="Continue to safe intake").is_visible()
         assert_no_horizontal_clip(page, "engagement preview")
 
         guide_trigger = page.get_by_role("button", name="Open the Mission Control guide")
@@ -262,7 +262,7 @@ def run_browser_checks(base_url: str) -> None:
         assert float(page.locator(".console-empty span").evaluate("element => parseFloat(getComputedStyle(element).fontSize)")) >= 12
 
         page.get_by_role("button", name="Engagements").click()
-        page.get_by_text("Bring the target. Keep the proof.").wait_for()
+        page.get_by_role("heading", name="Run a mission. See what AEGIS produces.", level=1).wait_for()
         page.go_back()
         page.get_by_role("heading", name="Engineering gate runner", level=1).wait_for()
         assert page.evaluate("window.location.hash") == "#/gate-runner"

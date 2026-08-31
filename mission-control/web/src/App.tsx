@@ -44,6 +44,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react'
 import { useMissionControl } from './api'
+import ShowcaseMission, { ShowcaseQuickstart } from './ShowcaseMission'
 import type { AuditRecord, Engagement, EngagementCreateInput, GateRun, ReadinessGate, RetentionInput, RunComparison, SafetyLevel, SecurityControl, SecurityTeam, ShadowAIData, ShadowAIPolicyInput, Snapshot, Team } from './types'
 
 type View = 'overview' | 'engagements' | 'coverage' | 'shadow' | 'teams' | 'gates' | 'agents' | 'workspace' | 'evidence'
@@ -51,7 +52,7 @@ type ViewScale = 80 | 90 | 100 | 110 | 120
 type ViewDensity = 'comfortable' | 'compact'
 
 const viewScales: ViewScale[] = [80, 90, 100, 110, 120]
-const guideVersion = '2026.08.30.1'
+const guideVersion = '2026.08.31.1'
 
 const nav: Array<{ id: View; label: string; icon: typeof LayoutDashboard }> = [
   { id: 'overview', label: 'Command', icon: LayoutDashboard },
@@ -237,11 +238,11 @@ function MarkingBar({ snapshot }: { snapshot: Snapshot }) {
   return (
     <aside className={`marking-bar ${demo ? 'is-demo' : ''}`} aria-label="Data safety classification">
       {demo ? <Radio size={13} /> : <LockKeyhole size={13} />}
-      <span>{demo ? 'PUBLIC_READ_ONLY_SHOWCASE' : saas ? 'TENANT_ISOLATED_WORKSPACE' : snapshot.program.marking}</span>
+      <span>{demo ? 'PUBLIC_INTERACTIVE_SHOWCASE' : saas ? 'TENANT_ISOLATED_WORKSPACE' : snapshot.program.marking}</span>
       <i />
-      <span>{demo ? 'SYNTHETIC AGENT FEED' : saas ? 'CUSTOMER DATA BOUNDARY ACTIVE' : 'ASSURANCE OUTPUT LOCKED'}</span>
+      <span>{demo ? 'SYNTHETIC MISSION MODE' : saas ? 'CUSTOMER DATA BOUNDARY ACTIVE' : 'ASSURANCE OUTPUT LOCKED'}</span>
       <i />
-      <span>{demo ? 'CONTROL ACTIONS REMOVED' : saas ? 'RAW AI PROMPTS NOT RETAINED' : 'DIAGNOSTIC OPERATIONS PERMITTED'}</span>
+      <span>{demo ? 'REAL CONTROL ACTIONS REMOVED' : saas ? 'RAW AI PROMPTS NOT RETAINED' : 'DIAGNOSTIC OPERATIONS PERMITTED'}</span>
     </aside>
   )
 }
@@ -429,6 +430,7 @@ function SectionHeading({ overline, title, detail, action, nested = false }: { o
 function Overview({ snapshot, runGate, setView, busy, controlsEnabled }: { snapshot: Snapshot; runGate: (id: string) => void; setView: (view: View) => void; busy: boolean; controlsEnabled: boolean }) {
   const program = snapshot.program
   const pending = program.gates.filter((gate) => gate.status !== 'VERIFIED').length
+  const demo = snapshot.deployment.mode === 'demo'
   return (
     <div className="view view--overview">
       <section className="brief">
@@ -437,11 +439,11 @@ function Overview({ snapshot, runGate, setView, busy, controlsEnabled }: { snaps
           <h1 data-view-heading tabIndex={-1}>Trust is a state.<br /><em>Prove every transition.</em></h1>
           <p>{program.rationale}</p>
           <div className="brief__actions">
-            <button type="button" className="button button--primary" onClick={() => setView('gates')}>
-              Open gate runner <ArrowUpRight size={15} />
+            <button type="button" className="button button--primary" onClick={() => setView(demo ? 'engagements' : 'gates')}>
+              {demo ? 'Start interactive mission' : 'Open gate runner'} <ArrowUpRight size={15} />
             </button>
             <button type="button" className="button button--quiet" onClick={() => setView('evidence')}>
-              Inspect evidence
+              {demo ? 'See the proof model' : 'Inspect evidence'}
             </button>
           </div>
         </div>
@@ -454,6 +456,8 @@ function Overview({ snapshot, runGate, setView, busy, controlsEnabled }: { snaps
           <small>FAIL-CLOSED // POLICY ENFORCED</small>
         </div>
       </section>
+
+      {demo && <ShowcaseQuickstart onStart={() => setView('engagements')} />}
 
       <section className="stats-grid">
         <Stat label="READINESS" value={`${program.verified}/${program.total}`} hint={`${pending} prerequisite gates pending`} icon={<Fingerprint size={19} />} />
@@ -787,6 +791,8 @@ function EngagementsView({ snapshot, engagements, controlsEnabled, onNew, onUplo
   useEffect(() => {
     if (!active && engagements[0]) setSelectedId(engagements[0].id)
   }, [active, engagements])
+
+  if (snapshot.deployment.mode === 'demo') return <ShowcaseMission />
 
   const upload = (files: File[]) => {
     if (!active || files.length === 0) return
@@ -1351,8 +1357,8 @@ function GuidePanel({ snapshot, setView, onClose }: { snapshot: Snapshot; setVie
       title: 'Turn the request into an authorized work order.',
       overline: 'SCOPE / ENGAGEMENT',
       description: 'Engagements keep the client or product, exact targets, authorization, exclusions, uploaded assets, team plan, findings, reruns and exports in one durable record.',
-      signal: demo ? 'Public mode shows this operating model but never accepts targets or files.' : 'A saved engagement is not permission to attack anything outside its recorded scope or authorization window.',
-      action: demo ? 'Open Engagements to preview the four supported workflows.' : 'Create the engagement, attest your authority, define stop conditions, then attach the inputs the teams need.',
+      signal: demo ? 'The public mission uses reserved synthetic targets. Optional local files contribute visible metadata only; their content never leaves the browser.' : 'A saved engagement is not permission to attack anything outside its recorded scope or authorization window.',
+      action: demo ? 'Open Engagements, choose a mission, add safe inputs, run all seven teams, then compare and export the result.' : 'Create the engagement, attest your authority, define stop conditions, then attach the inputs the teams need.',
       view: 'engagements',
       icon: Target,
     },
@@ -1378,10 +1384,10 @@ function GuidePanel({ snapshot, setView, onClose }: { snapshot: Snapshot; setVie
       title: demo ? 'Follow the proof trail.' : 'Operate through controlled queues.',
       overline: demo ? 'VERIFY / EVIDENCE' : 'ACT / WORKSPACE',
       description: demo
-        ? 'Evidence shows how readiness and activity stay traceable. Public controls are removed, so you can inspect the operating model without changing it.'
+        ? 'Evidence shows how readiness and activity stay traceable. The interactive mission simulates processing in-browser while real control and customer-data routes remain removed.'
         : 'Workspace Controls is where authorized users review approvals, connectors, retention, and safety state. High-risk work stays gated and auditable.',
-      signal: demo ? 'Synthetic-only and read-only markings remain visible throughout the tour.' : 'Use the narrowest connector capabilities and require a separate approver for critical actions.',
-      action: demo ? 'Finish in Evidence, then use the Guide button anytime you need this orientation again.' : 'Connect observation sources first; only enable execution capabilities when there is a documented need.',
+      signal: demo ? 'Synthetic-only markings remain visible throughout the workflow and inside every downloaded demonstration package.' : 'Use the narrowest connector capabilities and require a separate approver for critical actions.',
+      action: demo ? 'Run the interactive mission, export its proof package, then inspect Evidence to see the production proof model.' : 'Connect observation sources first; only enable execution capabilities when there is a documented need.',
       view: demo ? 'evidence' : 'workspace',
       icon: demo ? FileCheck2 : SlidersHorizontal,
     },
@@ -1398,7 +1404,7 @@ function GuidePanel({ snapshot, setView, onClose }: { snapshot: Snapshot; setVie
         <header className="guide-panel__header">
           <span className="eyebrow"><BookOpen size={13} /> FIELD GUIDE / {demo ? 'PUBLIC SHOWCASE' : 'SECURE WORKSPACE'}</span>
           <h2>Know what you are seeing.<br /><em>Know what to do next.</em></h2>
-          <p>{demo ? 'A five-step orientation to the AEGIS proof model. This showcase is safe to explore: its data is synthetic and every control action is removed.' : 'A five-step operating path for a new workspace user. Scope first, act through policy, and verify every outcome.'}</p>
+          <p>{demo ? 'A five-step orientation to the AEGIS proof model. The guided mission is interactive and browser-contained; real controls, target contact, uploads and customer data remain removed.' : 'A five-step operating path for a new workspace user. Scope first, act through policy, and verify every outcome.'}</p>
         </header>
         <div className="guide-panel__body">
           <nav className="guide-steps" aria-label="Orientation steps">
