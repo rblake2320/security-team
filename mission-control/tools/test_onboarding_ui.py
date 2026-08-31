@@ -25,16 +25,43 @@ def free_port() -> int:
         return int(sock.getsockname()[1])
 
 
-def wait_for_health(base_url: str) -> None:
-    deadline = time.monotonic() + 15
+def server_log_tail(log_path: Path | None, limit: int = 4_000) -> str:
+    if log_path is None or not log_path.exists():
+        return "<server log unavailable>"
+    try:
+        content = log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        return f"<server log unreadable: {exc}>"
+    return content[-limit:] or "<server log empty>"
+
+
+def wait_for_health(
+    base_url: str,
+    *,
+    process: subprocess.Popen[str] | None = None,
+    log_path: Path | None = None,
+    timeout_seconds: float = 30,
+) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_error = "no response"
     while time.monotonic() < deadline:
+        if process is not None and process.poll() is not None:
+            raise RuntimeError(
+                f"Demo server exited with code {process.returncode} before becoming healthy at {base_url}. "
+                f"Server log:\n{server_log_tail(log_path)}"
+            )
         try:
             with urllib.request.urlopen(f"{base_url}api/health", timeout=1) as response:
                 if response.status == 200:
                     return
-        except OSError:
+                last_error = f"HTTP {response.status}"
+        except OSError as exc:
+            last_error = f"{type(exc).__name__}: {exc}"
             time.sleep(0.2)
-    raise RuntimeError(f"Demo server did not become healthy at {base_url}")
+    raise RuntimeError(
+        f"Demo server did not become healthy at {base_url} after {timeout_seconds:.0f}s "
+        f"(last error: {last_error}). Server log:\n{server_log_tail(log_path)}"
+    )
 
 
 def assert_html_transform_is_disabled(base_url: str) -> None:
@@ -405,6 +432,17 @@ def main() -> int:
             assert_html_transform_is_disabled(base_url)
             run_browser_checks(base_url)
         else:
+            build_profile_path = MISSION_ROOT / "web" / "dist" / "aegis-build-profile.txt"
+            build_profile = (
+                build_profile_path.read_text(encoding="utf-8").strip()
+                if build_profile_path.exists()
+                else "missing"
+            )
+            if build_profile != "operator":
+                raise RuntimeError(
+                    "Tenant interface regression requires the operator web build; "
+                    f"found {build_profile!r}. Run `npm run build` in mission-control/web first."
+                )
             port = free_port()
             base_url = f"http://127.0.0.1:{port}/"
             temp_logs = tempfile.TemporaryDirectory(prefix="aegis-ui-test-", ignore_cleanup_errors=True)
@@ -421,7 +459,7 @@ def main() -> int:
                 creationflags=creation_flags,
             )
             servers.append(server)
-            wait_for_health(base_url)
+            wait_for_health(base_url, process=server, log_path=log_path)
             assert_html_transform_is_disabled(base_url)
             run_browser_checks(base_url)
             server.terminate()
@@ -430,7 +468,8 @@ def main() -> int:
 
             tenant_port = free_port()
             tenant_url = f"http://127.0.0.1:{tenant_port}/"
-            tenant_log_handle = (Path(temp_logs.name) / "tenant-server.log").open("w", encoding="utf-8")
+            tenant_log_path = Path(temp_logs.name) / "tenant-server.log"
+            tenant_log_handle = tenant_log_path.open("w", encoding="utf-8")
             log_handles.append(tenant_log_handle)
             tenant_env = os.environ.copy()
             tenant_env.update(
@@ -454,7 +493,7 @@ def main() -> int:
                 env=tenant_env,
             )
             servers.append(tenant_server)
-            wait_for_health(tenant_url)
+            wait_for_health(tenant_url, process=tenant_server, log_path=tenant_log_path)
             assert_html_transform_is_disabled(tenant_url)
             run_tenant_engagement_checks(tenant_url)
     finally:

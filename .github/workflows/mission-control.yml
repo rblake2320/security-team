@@ -131,12 +131,16 @@ jobs:
             docker network rm "$network" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
+          database_ready=0
           for _ in $(seq 1 45); do
-            if docker exec "$db_container" pg_isready --username aegis_admin --dbname aegis_recovery_ci >/dev/null; then
+            if docker exec "$db_container" psql --username aegis_admin --dbname aegis_recovery_ci \
+              --no-align --tuples-only --command 'SELECT 1' >/dev/null 2>&1; then
+              database_ready=1
               break
             fi
             sleep 1
           done
+          test "$database_ready" -eq 1
           docker exec "$db_container" psql --username aegis_admin --dbname aegis_recovery_ci --set ON_ERROR_STOP=1 \
             --command 'CREATE TABLE organizations (id text PRIMARY KEY, name text NOT NULL); INSERT INTO organizations VALUES ('\''tenant-a'\'', '\''Synthetic tenant'\'');'
           common=(--rm --network "$network" \
