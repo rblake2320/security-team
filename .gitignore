@@ -52,3 +52,12 @@ dist/
 # ---------------------------------------------------------------------------
 **/_tmp_*.json
 **/*.tmp
+
+# ---------------------------------------------------------------------------
+# PRIVATE / OUT-OF-SCOPE — a leading underscore at the repository root is
+# reserved for local working copies and scratch review areas. These must never
+# enter version control.
+# ---------------------------------------------------------------------------
+/_*/
+/.cursor/
+desktop.ini

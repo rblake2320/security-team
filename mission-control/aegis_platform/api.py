@@ -953,6 +953,7 @@ def create_app(settings: Settings | None = None, *, create_schema: bool = True) 
         ctx: RequestContext = Depends(request_context),
     ) -> dict[str, Any]:
         same_origin(request)
+        require_permission(ctx.membership.role, "evidence.write")
         engagement = None
         assessment_run = None
         if engagement_id:

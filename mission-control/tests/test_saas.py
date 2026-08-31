@@ -24,6 +24,7 @@ from aegis_platform.models import (
     TelemetryEvent,
     User,
 )
+from aegis_platform.policies import ROLE_PERMISSIONS
 
 
 @pytest.fixture()
@@ -53,6 +54,135 @@ def provision(client: TestClient, capabilities: list[str]) -> tuple[dict, str]:
     assert response.status_code == 201, response.text
     body = response.json()
     return body["connector"], body["token"]
+
+
+@pytest.mark.parametrize("role", ["viewer", "auditor"])
+def test_read_only_reviewer_roles_cannot_mutate_human_api(app_bundle, role: str):
+    client, app, _settings = app_bundle
+    email = f"{role}@example.test"
+    with app.state.database.session() as session:
+        organization = session.scalar(select(Organization).where(Organization.slug == "owner"))
+        assert organization is not None
+        user = User(email=email, display_name=role.title())
+        session.add(user)
+        session.flush()
+        session.add(Membership(organization_id=organization.id, user_id=user.id, role=role))
+
+    expected_permissions = {
+        "viewer": frozenset({"workspace.read", "tasks.read", "evidence.read", "engagements.read"}),
+        "auditor": frozenset(
+            {"workspace.read", "tasks.read", "evidence.read", "audit.read", "engagements.read", "engagements.export"}
+        ),
+    }
+    assert ROLE_PERMISSIONS[role] == expected_permissions[role]
+
+    headers = {"X-Dev-User": email}
+    engagement = {
+        "name": "Reviewer denial probe",
+        "engagementType": "own-site",
+        "objective": "Prove the reviewer role cannot create an engagement.",
+        "scopeRules": "Only a synthetic target is in scope for this denial probe.",
+        "authorizationBasis": "asset-owner",
+        "authorizationAttestation": "This is a synthetic authorization statement used only for a denial test.",
+        "authorizationConfirmed": True,
+        "selectedTeams": ["purple"],
+        "targets": [
+            {
+                "kind": "website",
+                "displayName": "Synthetic target",
+                "locator": "https://example.test",
+                "environment": "staging",
+            }
+        ],
+    }
+    def assert_denied(method: str, path: str, **kwargs):
+        response = client.request(method, path, headers=headers, **kwargs)
+        assert response.status_code == 403, f"{method} {path}: {response.status_code} {response.text}"
+
+    assert_denied("POST", "/api/v1/invitations", json={"email": "invitee@example.test", "role": "viewer"})
+    assert_denied(
+        "POST",
+        "/api/v1/connectors",
+        json={"name": "Denied connector", "capabilities": ["observe.status"]},
+    )
+    assert_denied("DELETE", "/api/v1/connectors/missing")
+    assert_denied("POST", "/api/v1/tasks", json={"title": "Denied task", "action": "observe.status"})
+    assert_denied(
+        "POST",
+        "/api/v1/tasks/missing/decision",
+        json={"decision": "rejected", "note": "Denied reviewer decision."},
+    )
+    assert_denied("POST", "/api/v1/engagements", json=engagement)
+    assert_denied("POST", "/api/v1/engagements/missing/launch", json={"mode": "safe"})
+    assert_denied("POST", "/api/v1/engagements/missing/assets/missing/analyze", json={})
+    assert_denied(
+        "POST",
+        "/api/v1/evidence",
+        files={"file": ("probe.txt", b"denied", "text/plain")},
+    )
+    assert_denied(
+        "POST",
+        "/api/v1/evidence/missing/scan",
+        json={"status": "rejected", "note": "Denied reviewer scan."},
+    )
+    assert_denied(
+        "POST",
+        "/api/v1/findings",
+        json={"title": "Denied finding", "description": "Synthetic denial probe.", "severity": "low"},
+    )
+    assert_denied(
+        "POST",
+        "/api/v1/incidents",
+        json={"title": "Denied incident", "severity": "low", "summary": "Synthetic denial probe."},
+    )
+    assert_denied(
+        "PUT",
+        "/api/v1/retention",
+        json={
+            "telemetryDays": 30,
+            "taskDays": 90,
+            "evidenceDays": 365,
+            "auditDays": 365,
+            "legalHoldDefault": False,
+        },
+    )
+    assert_denied("POST", "/api/v1/retention/sweep", json={"confirmation": "PURGE_EXPIRED_DATA"})
+    assert_denied(
+        "POST",
+        "/api/v1/safety",
+        json={"level": "cautious", "reason": "Synthetic reviewer denial probe."},
+    )
+    assert_denied(
+        "PUT",
+        "/api/v1/security-coverage/missing",
+        json={
+            "enabled": True,
+            "ownerTeam": "purple",
+            "status": "configured",
+            "reason": "Synthetic reviewer denial probe.",
+            "configuration": {},
+        },
+    )
+    assert_denied(
+        "PUT",
+        "/api/v1/shadow-ai/policy",
+        json={
+            "defaultDisposition": "monitor",
+            "sensitiveDataDisposition": "block",
+            "retainPromptContent": False,
+        },
+    )
+    assert_denied(
+        "POST",
+        "/api/v1/shadow-ai/assets/missing/decision",
+        json={"disposition": "blocked", "reason": "Synthetic reviewer denial probe."},
+    )
+    assert_denied(
+        "POST",
+        "/api/v1/shadow-ai/violations/missing/decision",
+        json={"status": "resolved", "note": "Denied reviewer decision."},
+    )
+    assert_denied("POST", "/api/runs", json={"gateId": "synthetic"})
 
 
 def test_uninvited_identity_and_cross_workspace_access_fail_closed(app_bundle):
