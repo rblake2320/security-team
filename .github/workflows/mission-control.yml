@@ -180,7 +180,7 @@ jobs:
       - name: Inspect connector runtime boundary
         run: |
           test "$(docker image inspect aegis-connector:ci --format '{{.Config.User}}')" = "aegis"
-          test "$(docker image inspect aegis-connector:ci --format '{{index .Config.Labels \"org.opencontainers.image.revision\"}}')" = "$GITHUB_SHA"
+          test "$(docker image inspect aegis-connector:ci --format '{{index .Config.Labels "org.opencontainers.image.revision"}}')" = "$GITHUB_SHA"
           docker run --rm --entrypoint python aegis-connector:ci -c "import aegis_connector; assert aegis_connector.__version__ == '1.0.0'"
 
       - name: Generate SBOM and gate container vulnerabilities
