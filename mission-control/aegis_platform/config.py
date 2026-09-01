@@ -21,6 +21,7 @@ def _integer(name: str, default: int) -> int:
 @dataclass(frozen=True)
 class Settings:
     environment: str = "development"
+    build_revision: str = "development"
     database_url: str = f"sqlite:///{(PLATFORM_ROOT / 'runtime' / 'platform.db').as_posix()}"
     evidence_root: Path = PLATFORM_ROOT / "runtime" / "evidence"
     evidence_master_key: str = "development-evidence-key-not-production"
@@ -45,6 +46,7 @@ class Settings:
     def from_env(cls) -> "Settings":
         settings = cls(
             environment=os.getenv("AEGIS_ENV", "development").strip().lower(),
+            build_revision=os.getenv("AEGIS_COMMIT", "development").strip().lower(),
             database_url=os.getenv(
                 "DATABASE_URL",
                 f"sqlite:///{(PLATFORM_ROOT / 'runtime' / 'platform.db').as_posix()}",
@@ -94,6 +96,8 @@ class Settings:
             raise RuntimeError("CLAMAV_TIMEOUT_SECONDS must be between 1 and 300")
         if self.environment == "production":
             failures: list[str] = []
+            if not re.fullmatch(r"[0-9a-f]{40}", self.build_revision):
+                failures.append("AEGIS_COMMIT must be the exact 40-character production revision")
             if not self.database_url.startswith(("postgresql://", "postgresql+psycopg://")):
                 failures.append("DATABASE_URL must use PostgreSQL")
             elif urlparse(self.database_url).username != "aegis_runtime":

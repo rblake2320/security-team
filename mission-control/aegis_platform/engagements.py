@@ -467,7 +467,13 @@ def sync_asset_analysis_result(session: Session, task: Task) -> None:
             )
 
 
-def export_engagement_zip(session: Session, organization_id: str, engagement_id: str, audit: list[dict[str, Any]]) -> bytes:
+def export_engagement_zip(
+    session: Session,
+    organization_id: str,
+    engagement_id: str,
+    audit: list[dict[str, Any]],
+    audit_receipt: dict[str, Any],
+) -> bytes:
     row = _engagement(session, organization_id, engagement_id)
     payload = serialize_engagement(session, row)
     runs = payload["runs"]
@@ -475,10 +481,44 @@ def export_engagement_zip(session: Session, organization_id: str, engagement_id:
     if len(runs) >= 2:
         comparison = compare_runs(session, organization_id, engagement_id, runs[1]["id"], runs[0]["id"])
 
+    execution_receipts: list[dict[str, Any]] = []
+    tasks = session.scalars(select(Task).where(Task.organization_id == organization_id).order_by(Task.created_at))
+    for task in tasks:
+        if not isinstance(task.payload, dict) or task.payload.get("engagementId") != engagement_id:
+            continue
+        result_receipt = task.result.get("executionReceipt") if isinstance(task.result, dict) else None
+        execution_receipts.append(
+            {
+                "taskId": task.id,
+                "action": task.action,
+                "status": task.status,
+                "policy": task.payload.get("_executionPolicy"),
+                "executionGrantSha256": task.payload.get("_executionGrant", {}).get("sha256"),
+                "executionReceipt": result_receipt,
+                "completedAt": iso(task.completed_at),
+            }
+        )
+
     output = io.BytesIO()
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("engagement.json", json.dumps(payload, indent=2, ensure_ascii=False))
         archive.writestr("audit-log.json", json.dumps(audit, indent=2, ensure_ascii=False))
+        archive.writestr(
+            "audit-verification.json",
+            json.dumps(
+                {
+                    "schema": "aegis.audit-verification-receipt/1.0",
+                    "engagementId": engagement_id,
+                    "verifiedAt": iso(utcnow()),
+                    "workspaceLedger": audit_receipt,
+                    "includedEvents": len(audit),
+                    "note": "The workspace ledger receipt is authoritative. The included events are an engagement-scoped view and are not a replacement chain.",
+                },
+                indent=2,
+                ensure_ascii=False,
+            ),
+        )
+        archive.writestr("execution-receipts.json", json.dumps(execution_receipts, indent=2, ensure_ascii=False))
         archive.writestr("comparison.json", json.dumps(comparison or {"status": "A second completed run is required for comparison."}, indent=2))
 
         findings_csv = io.StringIO(newline="")
@@ -511,6 +551,6 @@ def export_engagement_zip(session: Session, organization_id: str, engagement_id:
         archive.writestr("asset-register.csv", assets_csv.getvalue())
         archive.writestr(
             "README.txt",
-            "AEGIS engagement export\n\nThis package contains tenant-scoped metadata, findings, run history, comparison, and audit evidence. Uploaded source files remain encrypted in the evidence store and are not duplicated into this portable package.\n",
+            "AEGIS engagement export\n\nThis package contains tenant-scoped metadata, findings, run history, comparison, execution-policy receipts, and an audit verification receipt. The hash-chained workspace ledger is authoritative; narrative summaries are not proof of execution. Uploaded source files remain encrypted in the evidence store and are not duplicated into this portable package.\n",
         )
     return output.getvalue()

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -29,8 +31,8 @@ from .models import (
     User,
     utcnow,
 )
-from .policies import ACTION_CATALOG, CONNECTOR_CAPABILITIES, ROLES, action_policy, require_permission
-from .security import AuthenticationError, Identity, issue_secret, normalize_email, scrub, secret_digest, secret_matches
+from .policies import ACTION_CATALOG, CONNECTOR_CAPABILITIES, ROLES, action_policy, action_policy_receipt, require_permission
+from .security import AuthenticationError, Identity, canonical_json, issue_secret, normalize_email, scrub, secret_digest, secret_matches
 from .storage import EvidenceStore
 from .tenancy import (
     set_connector_lookup_context,
@@ -136,6 +138,9 @@ def serialize_agent(row: Agent) -> dict[str, Any]:
 
 
 def serialize_task(row: Task) -> dict[str, Any]:
+    payload = dict(row.payload)
+    execution_policy = payload.pop("_executionPolicy", None)
+    execution_grant = payload.pop("_executionGrant", None)
     return {
         "id": row.id,
         "programId": row.program_id,
@@ -145,7 +150,9 @@ def serialize_task(row: Task) -> dict[str, Any]:
         "action": row.action,
         "riskLevel": row.risk_level,
         "status": row.status,
-        "payload": row.payload,
+        "payload": payload,
+        "executionPolicy": execution_policy,
+        "executionGrant": execution_grant,
         "dryRun": row.dry_run,
         "approvalRequired": row.approval_required,
         "result": row.result,
@@ -332,12 +339,51 @@ def create_task(
     program_id: str | None,
     payload: dict[str, Any],
     dry_run: bool,
+    build_revision: str,
 ) -> Task:
     require_permission(ctx.membership.role, "tasks.create")
     if ctx.organization.kill_switch_active or ctx.organization.safety_level in {"restricted", "halted"}:
         raise PermissionError("workspace safety controls currently prohibit task creation")
     policy = action_policy(action)
     clean_payload = scrub(payload)
+    execution_policy = action_policy_receipt(action, build_revision)
+    clean_payload["_executionPolicy"] = execution_policy
+    if action == "gate.run" and not str(clean_payload.get("gateId", "")).strip():
+        raise ValueError("gate.run requires an explicit gateId")
+    if action == "assessment.execute":
+        targets = clean_payload.get("targets")
+        if not isinstance(targets, list) or not targets:
+            raise ValueError("assessment.execute requires at least one authorized target")
+        target_ids = [
+            str(item.get("id", "")).strip()
+            for item in targets
+            if isinstance(item, dict)
+        ]
+        if (
+            len(target_ids) != len(targets)
+            or any(not target_id for target_id in target_ids)
+            or len(set(target_ids)) != len(target_ids)
+        ):
+            raise ValueError("assessment.execute requires unique identifiers for every authorized target")
+        team_plan = clean_payload.get("teamPlan")
+        teams = team_plan.get("teams") if isinstance(team_plan, dict) else None
+        if not isinstance(teams, list) or not teams:
+            raise ValueError("assessment.execute requires an explicit required-team plan")
+        team_ids = [
+            str(item.get("id", "")).strip()
+            for item in teams
+            if isinstance(item, dict)
+        ]
+        if len(team_ids) != len(teams) or any(not team_id for team_id in team_ids) or len(set(team_ids)) != len(team_ids):
+            raise ValueError("assessment.execute requires unique identifiers for every required team")
+    if action == "evidence.analyze" and not (
+        clean_payload.get("evidenceId")
+        and re.fullmatch(r"[0-9a-f]{64}", str(clean_payload.get("sha256", "")))
+        and clean_payload.get("mediaKind")
+        and isinstance(clean_payload.get("sizeBytes"), int)
+        and clean_payload["sizeBytes"] >= 0
+    ):
+        raise ValueError("evidence.analyze requires an authorized evidence receipt")
     if policy.dry_run_required and not dry_run:
         dry_run_id = str(clean_payload.get("validatedDryRunTaskId", ""))
         prior = session.scalar(
@@ -365,6 +411,8 @@ def create_task(
         if policy.connector_capability not in connector.capabilities:
             raise PermissionError("connector is not allowlisted for this action")
     if agent_id:
+        if not connector:
+            raise ValueError("agent-scoped work requires its connector")
         agent = session.scalar(
             select(Agent).where(
                 Agent.id == agent_id,
@@ -373,6 +421,8 @@ def create_task(
         )
         if not agent or (connector and agent.connector_id != connector.id):
             raise ValueError("agent not found for this connector")
+        if policy.connector_capability not in agent.capabilities:
+            raise PermissionError("agent is not allowlisted for this action")
     if program_id and not session.scalar(
         select(Program.id).where(
             Program.id == program_id,
@@ -427,6 +477,8 @@ def create_task(
             "dry_run": dry_run,
             "approval_required": policy.approval_required,
             "connector_id": connector_id,
+            "engagement_id": clean_payload.get("engagementId"),
+            "execution_policy": execution_policy,
         },
     )
     return task
@@ -605,11 +657,75 @@ def lease_task(session: Session, connector: Connector, settings: Settings) -> tu
     if policy.connector_capability not in connector.capabilities:
         task.status = "blocked"
         task.error = "connector capability revoked before lease"
+        append_audit(
+            session,
+            connector.organization_id,
+            actor=f"connector:{connector.id}",
+            action="task.blocked",
+            target_type="task",
+            target_id=task.id,
+            detail={
+                "connector_id": connector.id,
+                "engagement_id": task.payload.get("engagementId"),
+                "reason": task.error,
+            },
+        )
         return None
+    if task.agent_id:
+        agent = session.scalar(
+            select(Agent).where(
+                Agent.id == task.agent_id,
+                Agent.organization_id == connector.organization_id,
+                Agent.connector_id == connector.id,
+            )
+        )
+        if not agent or policy.connector_capability not in agent.capabilities:
+            task.status = "blocked"
+            task.error = "agent capability revoked before lease"
+            append_audit(
+                session,
+                connector.organization_id,
+                actor=f"connector:{connector.id}",
+                action="task.blocked",
+                target_type="task",
+                target_id=task.id,
+                detail={
+                    "connector_id": connector.id,
+                    "agent_id": task.agent_id,
+                    "engagement_id": task.payload.get("engagementId"),
+                    "reason": task.error,
+                },
+            )
+            return None
     lease_token = issue_secret("aegl")
     task.lease_token_hash = secret_digest(lease_token, settings.token_pepper)
     task.locked_until = now + timedelta(seconds=settings.lease_seconds)
     task.status = "running"
+    policy_receipt = task.payload.get("_executionPolicy") or action_policy_receipt(task.action, settings.build_revision)
+    grant_material = {
+        "schema": "aegis.execution-grant/1.0",
+        "taskId": task.id,
+        "connectorId": connector.id,
+        "agentId": task.agent_id,
+        "action": task.action,
+        "effectiveCapabilities": [policy.connector_capability],
+        "risk": policy.risk,
+        "approvalRequired": policy.approval_required,
+        "dryRun": task.dry_run,
+        "reversible": policy.reversible,
+        "issuedAt": iso(now),
+        "expiresAt": iso(task.locked_until),
+        "policy": policy_receipt,
+    }
+    execution_grant = {
+        **grant_material,
+        "sha256": hashlib.sha256(canonical_json(grant_material).encode("utf-8")).hexdigest(),
+    }
+    task.payload = {
+        **task.payload,
+        "_executionPolicy": policy_receipt,
+        "_executionGrant": execution_grant,
+    }
     append_audit(
         session,
         connector.organization_id,
@@ -617,9 +733,100 @@ def lease_task(session: Session, connector: Connector, settings: Settings) -> tu
         action="task.leased",
         target_type="task",
         target_id=task.id,
-        detail={"connector_id": connector.id, "locked_until": iso(task.locked_until)},
+        detail={
+            "connector_id": connector.id,
+            "locked_until": iso(task.locked_until),
+            "engagement_id": task.payload.get("engagementId"),
+            "execution_grant": execution_grant,
+        },
     )
     return task, lease_token
+
+
+def _validated_completion_result(
+    task: Task,
+    status: str,
+    result: dict[str, Any],
+    error: str | None,
+) -> dict[str, Any]:
+    clean = scrub(result)
+    grant = task.payload.get("_executionGrant") if isinstance(task.payload, dict) else None
+    receipt = clean.get("executionReceipt") if isinstance(clean, dict) else None
+    if not isinstance(grant, dict) or not isinstance(receipt, dict):
+        raise ValueError("task completion must include its leased execution-grant receipt")
+    if receipt.get("executionGrantSha256") != grant.get("sha256"):
+        raise ValueError("task completion does not match the active execution grant")
+
+    if status == "failed":
+        if not (error or "").strip():
+            raise ValueError("failed task completion requires a concrete error")
+        return clean
+    if error:
+        raise ValueError("successful task completion cannot include an error")
+
+    meaningful = {key: value for key, value in clean.items() if key != "executionReceipt"}
+    if not meaningful:
+        raise ValueError("empty task result cannot satisfy a successful completion")
+
+    if task.action == "assessment.execute":
+        targets = clean.get("targetResults")
+        teams = clean.get("teamResults")
+        if clean.get("assessmentStatus") != "completed" or not isinstance(targets, list) or not targets:
+            raise ValueError("successful assessment requires completed, non-empty target results")
+        if any(not isinstance(item, dict) or item.get("status") != "completed" for item in targets):
+            raise ValueError("blocked or failed assessment targets cannot be counted as successful")
+        expected_target_ids = {
+            str(item.get("id"))
+            for item in (task.payload.get("targets", []) if isinstance(task.payload, dict) else [])
+            if isinstance(item, dict) and item.get("id")
+        }
+        completed_target_ids = {
+            str(item.get("targetId"))
+            for item in targets
+            if isinstance(item, dict) and item.get("targetId")
+        }
+        if len(completed_target_ids) != len(targets) or completed_target_ids != expected_target_ids:
+            raise ValueError("assessment result does not account for every authorized target")
+        if not isinstance(teams, list) or not teams:
+            raise ValueError("successful assessment requires non-empty team results")
+        expected_teams = {
+            str(item.get("id"))
+            for item in (task.payload.get("teamPlan", {}).get("teams", []) if isinstance(task.payload, dict) else [])
+            if isinstance(item, dict) and item.get("id")
+        }
+        completed_teams = {
+            str(item.get("team"))
+            for item in teams
+            if isinstance(item, dict) and item.get("status") == "completed"
+        }
+        if len(completed_teams) != len(teams) or completed_teams != expected_teams:
+            raise ValueError("assessment result does not satisfy every required team")
+        if not isinstance(clean.get("engine"), str) or not clean["engine"].strip():
+            raise ValueError("successful assessment requires an identified execution engine")
+        if not isinstance(clean.get("score"), (int, float)) or isinstance(clean.get("score"), bool):
+            raise ValueError("successful assessment requires a numeric diagnostic score")
+        if not isinstance(clean.get("automaticFailure"), bool) or clean.get("diagnosticOnly") is not True:
+            raise ValueError("successful assessment must preserve automatic-failure and diagnostic-only semantics")
+        for key in ("findings", "recommendations"):
+            if not isinstance(clean.get(key), list):
+                raise ValueError(f"successful assessment requires a {key} register")
+    elif task.action == "evidence.analyze":
+        if clean.get("sha256") != task.payload.get("sha256"):
+            raise ValueError("evidence analysis receipt does not match the authorized evidence digest")
+        if not isinstance(clean.get("bytesAnalyzed"), int) or clean["bytesAnalyzed"] < 0:
+            raise ValueError("evidence analysis requires a concrete analyzed-byte count")
+        if clean.get("bytesAnalyzed") != task.payload.get("sizeBytes"):
+            raise ValueError("evidence analysis byte count does not match the authorized asset")
+        if clean.get("mediaKind") != task.payload.get("mediaKind"):
+            raise ValueError("evidence analysis media kind does not match the authorized asset")
+        if not isinstance(clean.get("suggestions"), list) or not isinstance(clean.get("findings"), list):
+            raise ValueError("evidence analysis requires suggestion and finding registers")
+    elif task.action == "gate.run":
+        if clean.get("gateId") != task.payload.get("gateId"):
+            raise ValueError("gate result does not match the leased gate")
+        if clean.get("passed") is not True or clean.get("returnCode") != 0:
+            raise ValueError("a non-passing gate cannot be counted as a successful task")
+    return clean
 
 
 def renew_task_lease(
@@ -683,8 +890,9 @@ def complete_task(
         locked_until = locked_until.replace(tzinfo=timezone.utc)
     if locked_until and locked_until < utcnow():
         raise PermissionError("task lease expired and failed closed")
+    clean_result = _validated_completion_result(task, status, result, error)
     task.status = status
-    task.result = scrub(result)
+    task.result = clean_result
     task.error = (error or "")[:4000] or None
     task.completed_at = utcnow()
     task.locked_until = None
@@ -703,7 +911,14 @@ def complete_task(
         action=f"task.{status}",
         target_type="task",
         target_id=task.id,
-        detail={"connector_id": connector.id, "has_error": bool(error)},
+        detail={
+            "connector_id": connector.id,
+            "engagement_id": task.payload.get("engagementId"),
+            "has_error": bool(error),
+            "result_sha256": hashlib.sha256(canonical_json(clean_result).encode("utf-8")).hexdigest(),
+            "execution_grant_sha256": task.payload.get("_executionGrant", {}).get("sha256"),
+            "policy_content_sha256": task.payload.get("_executionPolicy", {}).get("package", {}).get("contentSha256"),
+        },
     )
     return task
 

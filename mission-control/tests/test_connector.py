@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -10,6 +11,40 @@ import pytest
 from aegis_connector.analyzers import analyze_evidence, inspect_repository
 from aegis_connector.config import ConnectorConfig
 from aegis_connector.worker import ConnectorWorker
+
+
+def execution_grant(task_id: str, action: str, capability: str) -> dict:
+    material = {
+        "schema": "aegis.execution-grant/1.0",
+        "taskId": task_id,
+        "connectorId": "connector-1",
+        "agentId": None,
+        "action": action,
+        "effectiveCapabilities": [capability],
+        "risk": "high",
+        "approvalRequired": True,
+        "dryRun": False,
+        "reversible": True,
+        "issuedAt": "2026-09-01T00:00:00+00:00",
+        "expiresAt": "2026-09-01T00:02:00+00:00",
+        "policy": {
+            "schema": "aegis.action-policy-receipt/1.0",
+            "package": {
+                "name": "aegis-action-catalog",
+                "version": "1.0.0",
+                "contentSha256": "a" * 64,
+                "buildRevision": "development",
+            },
+            "action": action,
+            "connectorCapability": capability,
+        },
+    }
+    return {
+        **material,
+        "sha256": hashlib.sha256(
+            json.dumps(material, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        ).hexdigest(),
+    }
 
 
 def test_connector_runtime_is_model_independent():
@@ -97,6 +132,7 @@ class FakeAPI:
                 "id": "task-1",
                 "title": "Assess authorized repository",
                 "action": "assessment.execute",
+                "executionGrant": execution_grant("task-1", "assessment.execute", "assessment.execute"),
                 "payload": {
                     "mode": "safe",
                     "targets": [{"id": "target-1", "kind": "repository", "locator": str(self.root)}],
@@ -123,5 +159,45 @@ def test_worker_executes_assessment_and_returns_findings(tmp_path: Path):
     result = api.completed["result"]
     assert result["engine"] == "aegis-customer-edge/1.0"
     assert result["targetResults"][0]["kind"] == "repository"
+    assert result["targetResults"][0]["status"] == "completed"
     assert len(result["teamResults"]) == 7
     assert result["diagnosticOnly"] is True
+    assert result["executionReceipt"]["executionGrantSha256"] == execution_grant(
+        "task-1", "assessment.execute", "assessment.execute"
+    )["sha256"]
+
+
+class UnsupportedTargetAPI(FakeAPI):
+    def lease(self):  # type: ignore[no-untyped-def]
+        leased = super().lease()
+        if leased.get("task"):
+            leased["task"]["payload"]["targets"] = [
+                {"id": "target-1", "kind": "cloud", "locator": "tenant-a"}
+            ]
+        return leased
+
+
+def test_worker_does_not_count_unsupported_target_as_success(tmp_path: Path):
+    api = UnsupportedTargetAPI(tmp_path)
+    worker = ConnectorWorker(connector_config(tmp_path), api=api)  # type: ignore[arg-type]
+
+    assert worker.run_once() is True
+    assert api.completed is not None
+    assert api.completed["status"] == "failed"
+    assert "could not be executed" in api.completed["error"]
+    assert api.completed["result"]["assessmentStatus"] == "incomplete"
+    assert api.completed["result"]["targetResults"][0]["status"] == "blocked"
+
+
+def test_worker_rejects_tampered_effective_grant(tmp_path: Path):
+    api = FakeAPI(tmp_path)
+    leased = api.lease()
+    leased["task"]["executionGrant"]["effectiveCapabilities"] = ["network.block"]
+    api.leased = False
+    api.lease = lambda: leased  # type: ignore[method-assign]
+    worker = ConnectorWorker(connector_config(tmp_path), api=api)  # type: ignore[arg-type]
+
+    assert worker.run_once() is True
+    assert api.completed is not None
+    assert api.completed["status"] == "failed"
+    assert "integrity check" in api.completed["error"]

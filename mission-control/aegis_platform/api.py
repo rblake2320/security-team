@@ -545,6 +545,7 @@ def create_app(
             program_id=body.program_id,
             payload=body.payload,
             dry_run=body.dry_run,
+            build_revision=settings.build_revision,
         )
         return {"task": serialize_task(task)}
 
@@ -900,6 +901,7 @@ def create_app(
                 "teamPlan": plan,
             },
             dry_run=False,
+            build_revision=settings.build_revision,
         )
         run.task_id = task.id
         engagement.status = "scheduled"
@@ -937,7 +939,13 @@ def create_app(
             for item in recent_audit(session, ctx.organization.id, 500)
             if item.get("targetId") == engagement_id or item.get("detail", {}).get("engagement_id") == engagement_id
         ]
-        payload = export_engagement_zip(session, ctx.organization.id, engagement_id, relevant_audit)
+        payload = export_engagement_zip(
+            session,
+            ctx.organization.id,
+            engagement_id,
+            relevant_audit,
+            verify_audit(session, ctx.organization.id),
+        )
         return Response(
             content=payload,
             media_type="application/zip",
@@ -1006,8 +1014,10 @@ def create_app(
                 "contentType": evidence.content_type,
                 "mediaKind": asset.media_kind,
                 "sha256": evidence.sha256,
+                "sizeBytes": evidence.size_bytes,
             },
             dry_run=False,
+            build_revision=settings.build_revision,
         )
         asset.analysis_status = "queued"
         append_audit(
@@ -1671,7 +1681,7 @@ def create_app(
                 Connector.revoked_at.is_(None),
             ).order_by(Connector.created_at).limit(1)
         )
-        task = create_task(session, ctx, title=f"Run {gate_id}", action="gate.run", connector_id=connector_id, agent_id=None, program_id=None, payload={"gateId": gate_id, "mode": str(body.get("mode", "engineering"))[:24]}, dry_run=False)
+        task = create_task(session, ctx, title=f"Run {gate_id}", action="gate.run", connector_id=connector_id, agent_id=None, program_id=None, payload={"gateId": gate_id, "mode": str(body.get("mode", "engineering"))[:24]}, dry_run=False, build_revision=settings.build_revision)
         return {"run": {"id": task.id, "gateId": gate_id, "gateName": task.title, "mode": "engineering", "status": "queued", "requestedAt": iso(task.created_at), "startedAt": None, "finishedAt": None, "returnCode": None, "output": "Task captured. High-risk execution awaits approval.", "elapsedSeconds": None}}
 
     dist = PLATFORM_ROOT / "web" / "dist"

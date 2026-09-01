@@ -38,6 +38,8 @@ AEGIS does not require a frontier model to complete its core workflow. With ever
 
 Future model integrations are optional advisory capabilities. They must use a separately scoped connector capability, identify their provider and model in the audit record, treat retrieved content as untrusted data, and never replace deterministic authorization, evidence, scoring overrides, task state, or audit decisions. Removing an advisory model must reduce enrichment only; it must not stop the product.
 
+Every leased task also carries an effective execution grant generated from the same deny-by-default action catalog the server enforces. The connector verifies the grant hash and permitted capability before work begins, then returns the grant digest in its execution receipt. A successful completion must contain the action-specific evidence contract; an empty result, missing team/target evidence, mismatched receipt, non-passing gate, or unsupported target cannot count as success. Engagement ZIPs include the exact policy/build receipt, task execution receipts, and a workspace-ledger verification receipt. The hash-chained ledger—not a narrative summary—is the authoritative execution record.
+
 ## Private owner console
 
 From `C:\Users\techai\security-team`:
@@ -70,7 +72,7 @@ Open `http://127.0.0.1:8780`. Development identity headers work only from loopba
 - Drag-and-drop media intake for documents, images, audio, video, code/data, and archives. Files are encrypted immediately, scanned by a private fail-closed ClamAV service, held in quarantine until cleared, and never made public by the showcase.
 - PostgreSQL-enforced row-level tenant isolation using a restricted runtime role and transaction-local identity/organization context.
 - Versioned assessment runs with stable finding fingerprints, baseline comparison, introduced/persistent/resolved results, and a portable ZIP containing JSON, CSV registers, audit records, and a human-readable manifest.
-- One-time connector credentials stored only as HMAC digests, explicit observation/action capabilities, revocation, heartbeat, idempotent event ingestion, and bounded payloads.
+- One-time connector credentials stored only as HMAC digests, explicit observation/action capabilities, server-generated hash-bound execution grants, revocation, heartbeat, idempotent event ingestion, and bounded payloads.
 - Deny-by-default action catalog with risk levels, human approval, successful dry-runs for critical actions, separation of duties, expiring leases, safety levels, and a kill switch.
 - Quarantined evidence with path/type/size controls, real malware verdicts, plaintext SHA-256 integrity, per-workspace derived AES-GCM encryption, legal holds, and retention sweeps.
 - Per-tenant hash-chained audit records with a verifier.

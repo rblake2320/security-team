@@ -281,11 +281,19 @@ def test_high_risk_task_requires_approval_then_leases_and_completes(app_bundle):
     connector, token = provision(client, ["gate.run"])
     created = client.post(
         "/api/v1/tasks",
-        json={"title": "Run release gates", "action": "gate.run", "connectorId": connector["id"]},
+        json={
+            "title": "Run release gates",
+            "action": "gate.run",
+            "connectorId": connector["id"],
+            "payload": {"gateId": "repo-hygiene"},
+        },
     )
     assert created.status_code == 201
     task = created.json()["task"]
     assert task["status"] == "awaiting_approval"
+    assert task["executionPolicy"]["package"]["buildRevision"] == "development"
+    assert len(task["executionPolicy"]["package"]["contentSha256"]) == 64
+    assert task["executionGrant"] is None
     assert client.get("/api/v1/connector/tasks/lease", headers={"Authorization": f"Bearer {token}"}).json()["task"] is None
 
     heartbeat = client.post(
@@ -309,6 +317,12 @@ def test_high_risk_task_requires_approval_then_leases_and_completes(app_bundle):
     assert approved.status_code == 200
     lease = client.get("/api/v1/connector/tasks/lease", headers={"Authorization": f"Bearer {token}"}).json()
     assert lease["task"]["id"] == task["id"]
+    grant = lease["task"]["executionGrant"]
+    assert grant["action"] == "gate.run"
+    assert grant["effectiveCapabilities"] == ["gate.run"]
+    assert len(grant["sha256"]) == 64
+    assert grant["policy"]["package"]["name"] == "aegis-action-catalog"
+    assert len(grant["policy"]["package"]["contentSha256"]) == 64
     assert client.post(
         f"/api/v1/connector/tasks/{task['id']}/renew",
         headers={"Authorization": f"Bearer {token}"},
@@ -321,13 +335,151 @@ def test_high_risk_task_requires_approval_then_leases_and_completes(app_bundle):
     )
     assert renewed.status_code == 200
     assert renewed.json()["taskId"] == task["id"]
+    empty = client.post(
+        f"/api/v1/connector/tasks/{task['id']}/complete",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "leaseToken": lease["leaseToken"],
+            "status": "succeeded",
+            "result": {"executionReceipt": {"executionGrantSha256": grant["sha256"]}},
+        },
+    )
+    assert empty.status_code == 400
+    assert "empty task result" in empty.json()["detail"]
+    wrong_grant = client.post(
+        f"/api/v1/connector/tasks/{task['id']}/complete",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "leaseToken": lease["leaseToken"],
+            "status": "succeeded",
+            "result": {
+                "gateId": "repo-hygiene",
+                "passed": True,
+                "returnCode": 0,
+                "executionReceipt": {"executionGrantSha256": "0" * 64},
+            },
+        },
+    )
+    assert wrong_grant.status_code == 400
+    silent_failure = client.post(
+        f"/api/v1/connector/tasks/{task['id']}/complete",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "leaseToken": lease["leaseToken"],
+            "status": "failed",
+            "result": {"executionReceipt": {"executionGrantSha256": grant["sha256"]}},
+        },
+    )
+    assert silent_failure.status_code == 400
+    assert "concrete error" in silent_failure.json()["detail"]
     completed = client.post(
         f"/api/v1/connector/tasks/{task['id']}/complete",
         headers={"Authorization": f"Bearer {token}"},
-        json={"leaseToken": lease["leaseToken"], "status": "succeeded", "result": {"passed": True}},
+        json={
+            "leaseToken": lease["leaseToken"],
+            "status": "succeeded",
+            "result": {
+                "gateId": "repo-hygiene",
+                "passed": True,
+                "returnCode": 0,
+                "executionReceipt": {"executionGrantSha256": grant["sha256"]},
+            },
+        },
     )
     assert completed.status_code == 200
     assert completed.json()["task"]["status"] == "succeeded"
+
+
+def test_agent_capability_revocation_blocks_lease_and_is_audited(app_bundle):
+    client, app, _settings = app_bundle
+    connector, token = provision(client, ["gate.run"])
+    auth = {"Authorization": f"Bearer {token}"}
+    heartbeat = client.post(
+        "/api/v1/connector/heartbeat",
+        headers=auth,
+        json={
+            "version": "1.0.0",
+            "capabilities": ["gate.run"],
+            "agents": [{"externalId": "scoped-worker", "name": "Scoped worker", "capabilities": ["gate.run"]}],
+        },
+    )
+    assert heartbeat.status_code == 200
+    agent = heartbeat.json()["agents"][0]
+
+    created = client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "Run scoped release gate",
+            "action": "gate.run",
+            "connectorId": connector["id"],
+            "agentId": agent["id"],
+            "payload": {"gateId": "repo-hygiene"},
+        },
+    )
+    assert created.status_code == 201
+    task = created.json()["task"]
+    assert client.post(
+        f"/api/v1/tasks/{task['id']}/decision",
+        json={"decision": "approved", "note": "Approved for the specifically scoped worker."},
+    ).status_code == 200
+
+    attenuated = client.post(
+        "/api/v1/connector/heartbeat",
+        headers=auth,
+        json={
+            "version": "1.0.1",
+            "capabilities": ["gate.run"],
+            "agents": [{"externalId": "scoped-worker", "name": "Scoped worker", "capabilities": []}],
+        },
+    )
+    assert attenuated.status_code == 200
+    assert attenuated.json()["agents"][0]["capabilities"] == []
+    assert client.get("/api/v1/connector/tasks/lease", headers=auth).json()["task"] is None
+
+    blocked = next(row for row in client.get("/api/v1/tasks").json()["tasks"] if row["id"] == task["id"])
+    assert blocked["status"] == "blocked"
+    assert blocked["error"] == "agent capability revoked before lease"
+    with app.state.database.session() as session:
+        event = session.scalar(
+            select(AuditEvent).where(AuditEvent.target_id == task["id"], AuditEvent.action == "task.blocked")
+        )
+        assert event is not None
+        assert event.detail["agent_id"] == agent["id"]
+        assert event.detail["reason"] == "agent capability revoked before lease"
+
+
+def test_assessment_task_rejects_implicit_targets_or_required_teams(app_bundle):
+    client, _app, _settings = app_bundle
+    connector, _token = provision(client, ["assessment.execute"])
+    missing_teams = client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "Incomplete assessment contract",
+            "action": "assessment.execute",
+            "connectorId": connector["id"],
+            "payload": {"targets": [{"id": "target-1", "kind": "website", "locator": "https://example.test"}]},
+        },
+    )
+    assert missing_teams.status_code == 400
+    assert "required-team plan" in missing_teams.json()["detail"]
+
+    duplicate_targets = client.post(
+        "/api/v1/tasks",
+        json={
+            "title": "Duplicate assessment scope",
+            "action": "assessment.execute",
+            "connectorId": connector["id"],
+            "payload": {
+                "targets": [
+                    {"id": "target-1", "kind": "website", "locator": "https://example.test"},
+                    {"id": "target-1", "kind": "api", "locator": "https://api.example.test"},
+                ],
+                "teamPlan": {"teams": [{"id": "blue"}]},
+            },
+        },
+    )
+    assert duplicate_targets.status_code == 400
+    assert "unique identifiers" in duplicate_targets.json()["detail"]
 
 
 def test_critical_actions_require_validated_dry_run_and_separate_approver(app_bundle):
@@ -529,6 +681,8 @@ def complete_assessment(client: TestClient, token: str, task_id: str, title: str
     assert lease.status_code == 200, lease.text
     leased = lease.json()
     assert leased["task"]["id"] == task_id
+    grant_sha256 = leased["task"]["executionGrant"]["sha256"]
+    expected_teams = [item["id"] for item in leased["task"]["payload"]["teamPlan"]["teams"]]
     completed = client.post(
         f"/api/v1/connector/tasks/{task_id}/complete",
         headers=auth,
@@ -536,7 +690,27 @@ def complete_assessment(client: TestClient, token: str, task_id: str, title: str
             "leaseToken": leased["leaseToken"],
             "status": "succeeded",
             "result": {
+                "engine": "synthetic-contract-test/1.0",
+                "assessmentStatus": "completed",
+                "executionMode": "safe",
+                "executionBoundary": "synthetic-test",
+                "targetResults": [
+                    {
+                        "targetId": leased["task"]["payload"]["targets"][0]["id"],
+                        "kind": "website",
+                        "status": "completed",
+                        "metrics": {"reachable": True},
+                        "findingCount": 1,
+                        "automaticFailure": False,
+                    }
+                ],
+                "teamResults": [
+                    {"team": team, "status": "completed", "check": "Synthetic contract evidence."}
+                    for team in expected_teams
+                ],
                 "score": 82,
+                "automaticFailure": False,
+                "diagnosticOnly": True,
                 "recommendations": [{"priority": "high", "title": "Tighten session controls"}],
                 "findings": [
                     {
@@ -546,6 +720,7 @@ def complete_assessment(client: TestClient, token: str, task_id: str, title: str
                         "ownerTeam": "yellow",
                     }
                 ],
+                "executionReceipt": {"executionGrantSha256": grant_sha256},
             },
         },
     )
@@ -637,6 +812,13 @@ def test_real_connector_executes_authorized_repository_engagement_end_to_end(app
     with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
         register = json.loads(archive.read("engagement.json"))
         assert register["runs"][0]["summary"]["engine"] == "aegis-customer-edge/1.0"
+        receipts = json.loads(archive.read("execution-receipts.json"))
+        assert receipts[0]["status"] == "succeeded"
+        assert receipts[0]["executionGrantSha256"] == receipts[0]["executionReceipt"]["executionGrantSha256"]
+        assert len(receipts[0]["policy"]["package"]["contentSha256"]) == 64
+        ledger = json.loads(archive.read("audit-verification.json"))
+        assert ledger["workspaceLedger"]["ok"] is True
+        assert ledger["workspaceLedger"]["head"] != "GENESIS"
 
 
 def test_engagement_intake_media_execution_comparison_and_export(app_bundle):
@@ -686,6 +868,7 @@ def test_engagement_intake_media_execution_comparison_and_export(app_bundle):
         headers={**auth, "X-Task-Lease": analysis_lease["leaseToken"]},
     )
     assert evidence_response.content == b"synthetic-media"
+    analysis_grant_sha256 = analysis_lease["task"]["executionGrant"]["sha256"]
     assert client.post(
         f"/api/v1/connector/tasks/{analysis_task_id}/complete",
         headers=auth,
@@ -693,8 +876,12 @@ def test_engagement_intake_media_execution_comparison_and_export(app_bundle):
             "leaseToken": analysis_lease["leaseToken"],
             "status": "succeeded",
             "result": {
+                "sha256": analysis_lease["task"]["payload"]["sha256"],
+                "bytesAnalyzed": len(evidence_response.content),
+                "mediaKind": "video",
                 "suggestions": [{"team": "orange", "title": "Review the demonstrated workflow", "detail": "Inspect every visible authorization transition."}],
                 "findings": [{"title": "Video reveals a verbose error", "description": "A synthetic media observation attached to this engagement.", "severity": "low", "ownerTeam": "blue"}],
+                "executionReceipt": {"executionGrantSha256": analysis_grant_sha256},
             },
         },
     ).status_code == 200
@@ -746,7 +933,16 @@ def test_engagement_intake_media_execution_comparison_and_export(app_bundle):
     assert exported.status_code == 200
     assert exported.headers["content-type"] == "application/zip"
     with zipfile.ZipFile(io.BytesIO(exported.content)) as archive:
-        assert {"README.txt", "engagement.json", "audit-log.json", "comparison.json", "findings.csv", "asset-register.csv"} <= set(archive.namelist())
+        assert {
+            "README.txt",
+            "engagement.json",
+            "audit-log.json",
+            "audit-verification.json",
+            "execution-receipts.json",
+            "comparison.json",
+            "findings.csv",
+            "asset-register.csv",
+        } <= set(archive.namelist())
         manifest = json.loads(archive.read("engagement.json"))
         assert manifest["id"] == engagement_id
         assert len(manifest["runs"]) == 2

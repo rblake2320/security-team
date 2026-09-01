@@ -75,6 +75,8 @@ Install the outbound-only customer-edge runtime from `Dockerfile.connector` or r
 
 The production core is model-independent. Do not configure any model-provider credential to satisfy readiness: the connector's repository, HTTP, evidence, and gate engines are deterministic and use no model SDK. Any future model-backed enrichment must be isolated behind a distinct optional capability and may not participate in identity, authorization, approval, lease, audit-chain, or automatic-failure decisions.
 
+The production image must receive the exact 40-character `AEGIS_COMMIT`; startup refuses an unknown revision. Task creation records that revision and the action-catalog content digest. At lease time the server records the effective connector capability in a hash-bound grant, and completion is accepted only when the connector returns the matching digest plus the required action-specific evidence. Do not weaken these checks to accommodate an older connector—upgrade or revoke that connector instead.
+
 ## 4. Validate and start the platform
 
 From `mission-control/deploy/vps`:

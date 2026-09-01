@@ -26,6 +26,7 @@ class ProductionReleaseContractTests(unittest.TestCase):
         self.assertRegex(dockerfile, r"FROM node:22-alpine@sha256:[0-9a-f]{64}")
         self.assertRegex(dockerfile, r"FROM python:3\.12-slim@sha256:[0-9a-f]{64}")
         self.assertIn('LABEL org.opencontainers.image.revision="$AEGIS_COMMIT"', dockerfile)
+        self.assertIn('ENV AEGIS_COMMIT="$AEGIS_COMMIT"', dockerfile)
 
         for name in ("compose.production.yml", "compose.showcase.yml"):
             compose = (MISSION_ROOT / "deploy" / "vps" / name).read_text(encoding="utf-8")
