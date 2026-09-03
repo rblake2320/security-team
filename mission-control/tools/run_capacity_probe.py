@@ -9,12 +9,14 @@ import math
 import os
 import time
 from collections import Counter, defaultdict
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 from urllib.parse import urlsplit
-
-import httpx
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 def canonical_json(value: object) -> str:
@@ -29,6 +31,37 @@ def percentile(values: list[float], quantile: float) -> float:
     return ordered[index]
 
 
+class NoRedirectHandler(HTTPRedirectHandler):
+    """Keep every load request on the explicitly selected origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[no-untyped-def]
+        return None
+
+
+def request_once(
+    method: str,
+    url: str,
+    headers: dict[str, str],
+    json_body: object | None,
+    timeout: float,
+) -> int:
+    """Execute one bounded request using only the Python standard library."""
+    body = None
+    request_headers = dict(headers)
+    if json_body is not None:
+        body = canonical_json(json_body).encode("utf-8")
+        request_headers.setdefault("Content-Type", "application/json")
+    request = Request(url, data=body, headers=request_headers, method=method)
+    opener = build_opener(NoRedirectHandler())
+    try:
+        with opener.open(request, timeout=timeout) as response:
+            response.read(65_537)
+            return response.status
+    except HTTPError as exc:
+        exc.read(65_537)
+        return exc.code
+
+
 def validate_profile(raw: dict[str, Any]) -> dict[str, Any]:
     if raw.get("schema") != "aegis.capacity-profile/1.0":
         raise ValueError("capacity profile schema is unsupported")
@@ -36,8 +69,8 @@ def validate_profile(raw: dict[str, Any]) -> dict[str, Any]:
     concurrency = int(raw.get("concurrency", 0))
     if requests < 1 or requests > 2_000_000:
         raise ValueError("requests must be between 1 and 2000000")
-    if concurrency < 1 or concurrency > min(requests, 20_000):
-        raise ValueError("concurrency must be positive and no greater than requests or 20000")
+    if concurrency < 1 or concurrency > min(requests, 512):
+        raise ValueError("concurrency must be positive and no greater than requests or 512")
     targets = raw.get("targets")
     if not isinstance(targets, list) or not targets:
         raise ValueError("at least one capacity target is required")
@@ -78,7 +111,7 @@ async def run_profile(
     base_url: str,
     headers: dict[str, str] | None = None,
     *,
-    transport: httpx.AsyncBaseTransport | None = None,
+    transport: Callable[[str, str, dict[str, str], object | None, float], int] | None = None,
 ) -> dict[str, Any]:
     profile = validate_profile(profile)
     request_count = int(profile["requests"])
@@ -98,16 +131,9 @@ async def run_profile(
     executed = 0
     failures = 0
     started = time.perf_counter()
-    limits = httpx.Limits(max_connections=concurrency, max_keepalive_connections=concurrency)
-
-    async with httpx.AsyncClient(
-        base_url=base_url,
-        headers=headers,
-        timeout=timeout,
-        limits=limits,
-        transport=transport,
-        follow_redirects=False,
-    ) as client:
+    requester = transport or request_once
+    loop = asyncio.get_running_loop()
+    with ThreadPoolExecutor(max_workers=concurrency, thread_name_prefix="aegis-capacity") as executor:
         async def worker() -> None:
             nonlocal executed, failures, next_index
             while next_index < request_count:
@@ -118,15 +144,18 @@ async def run_profile(
                 status = 0
                 error = ""
                 try:
-                    response = await client.request(
+                    status = await loop.run_in_executor(
+                        executor,
+                        requester,
                         target["method"],
-                        target["path"],
-                        json=target.get("json"),
+                        base_url + target["path"],
+                        headers or {},
+                        target.get("json"),
+                        timeout,
                     )
-                    status = response.status_code
                     if status not in {int(item) for item in target["expectedStatuses"]}:
                         error = f"unexpected HTTP {status}"
-                except httpx.HTTPError as exc:
+                except Exception as exc:
                     error = type(exc).__name__
                 latency = (time.perf_counter() - request_started) * 1000
                 target_name = f"{target['method']} {target['path']}"

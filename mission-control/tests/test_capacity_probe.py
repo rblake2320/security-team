@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 
-import httpx
 import pytest
 
 from tools.run_capacity_probe import run_profile, validate_profile
@@ -24,8 +23,11 @@ def profile() -> dict:
 
 
 def test_capacity_probe_emits_passing_commit_bound_receipt(monkeypatch):
-    async def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"path": request.url.path})
+    def handler(method, url, headers, json_body, timeout):  # type: ignore[no-untyped-def]
+        assert method == "GET"
+        assert url.startswith("http://test/")
+        assert timeout == 2
+        return 200
 
     monkeypatch.setenv("AEGIS_COMMIT", "a" * 40)
     receipt = asyncio.run(
@@ -33,7 +35,7 @@ def test_capacity_probe_emits_passing_commit_bound_receipt(monkeypatch):
             profile(),
             "http://test",
             {"X-Test-Identity": "secret-value"},
-            transport=httpx.MockTransport(handler),
+            transport=handler,
         )
     )
     assert receipt["result"]["passed"] is True
@@ -44,12 +46,10 @@ def test_capacity_probe_emits_passing_commit_bound_receipt(monkeypatch):
 
 
 def test_capacity_probe_fails_when_a_target_breaks_its_contract():
-    async def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(503 if request.url.path == "/api/ready" else 200)
+    def handler(method, url, headers, json_body, timeout):  # type: ignore[no-untyped-def]
+        return 503 if url.endswith("/api/ready") else 200
 
-    receipt = asyncio.run(
-        run_profile(profile(), "http://test", transport=httpx.MockTransport(handler))
-    )
+    receipt = asyncio.run(run_profile(profile(), "http://test", transport=handler))
     assert receipt["result"]["passed"] is False
     assert receipt["result"]["failures"] == 10
 
