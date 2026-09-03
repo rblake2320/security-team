@@ -137,7 +137,7 @@ def _catalog_material() -> dict[str, dict[str, object]]:
 
 def action_policy_receipt(action: str, build_revision: str) -> dict[str, object]:
     """Return the immutable policy material that governed a task at creation."""
-    policy = action_policy(action)
+    action_policy(action)
     catalog = _catalog_material()
     catalog_sha256 = hashlib.sha256(
         json.dumps(catalog, sort_keys=True, separators=(",", ":")).encode("utf-8")

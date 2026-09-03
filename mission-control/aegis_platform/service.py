@@ -31,7 +31,7 @@ from .models import (
     User,
     utcnow,
 )
-from .policies import ACTION_CATALOG, CONNECTOR_CAPABILITIES, ROLES, action_policy, action_policy_receipt, require_permission
+from .policies import CONNECTOR_CAPABILITIES, ROLES, action_policy, action_policy_receipt, require_permission
 from .security import AuthenticationError, Identity, canonical_json, issue_secret, normalize_email, scrub, secret_digest, secret_matches
 from .storage import EvidenceStore
 from .tenancy import (

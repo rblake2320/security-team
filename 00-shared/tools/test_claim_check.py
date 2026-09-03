@@ -1,4 +1,4 @@
-"""Regression test for `md_files()` scanning generated/runtime artifact directories.
+"""Regression tests for binding `md_files()` to canonical Git-tracked source.
 
 Found 2026-08-15, cross-examining CI-RED failure #1 (windows-latest, non-
 deterministic claim-gate violation count: 1 local / 59 earlier / 97 in CI, same
@@ -19,6 +19,7 @@ never depend on incidental test-execution history.
 from __future__ import annotations
 
 import sys
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -28,11 +29,17 @@ import claim_check as cc  # noqa: E402
 
 
 class MdFilesArtifactExclusionTests(unittest.TestCase):
+    @staticmethod
+    def init_repo(root: Path) -> None:
+        subprocess.run(["git", "init", "-q", str(root)], check=True)
+        subprocess.run(["git", "-C", str(root), "add", "00-shared/real_doc.md"], check=True)
+
     def test_pytest_cache_readme_is_excluded(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             (root / "00-shared").mkdir()
             (root / "00-shared" / "real_doc.md").write_text("real content", encoding="utf-8")
+            self.init_repo(root)
             original_root = cc.ROOT
             cc.ROOT = str(root)
             try:
@@ -60,15 +67,30 @@ class MdFilesArtifactExclusionTests(unittest.TestCase):
             root = Path(directory)
             (root / "00-shared").mkdir()
             (root / "00-shared" / "real_doc.md").write_text("real content", encoding="utf-8")
-            for junk_dir in (".git", "__pycache__", ".ruff_cache", "node_modules"):
+            for junk_dir in ("__pycache__", ".ruff_cache", "node_modules", ".venv", "_callosum_repo"):
                 d = root / junk_dir
                 d.mkdir()
                 (d / "noise.md").write_text("noise", encoding="utf-8")
+            self.init_repo(root)
             original_root = cc.ROOT
             cc.ROOT = str(root)
             try:
                 files = cc.md_files()
                 self.assertEqual(len(files), 1, "pre-existing exclusions must still hold")
+            finally:
+                cc.ROOT = original_root
+
+    def test_tracked_markdown_is_included_outside_known_directories(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "00-shared").mkdir()
+            tracked = root / "00-shared" / "real_doc.md"
+            tracked.write_text("real content", encoding="utf-8")
+            self.init_repo(root)
+            original_root = cc.ROOT
+            cc.ROOT = str(root)
+            try:
+                self.assertEqual(cc.md_files(), [str(tracked)])
             finally:
                 cc.ROOT = original_root
 

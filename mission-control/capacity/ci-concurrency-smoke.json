@@ -1,0 +1,26 @@
+{
+  "schema": "aegis.capacity-profile/1.0",
+  "name": "exact-artifact-ci-concurrency-smoke",
+  "requests": 400,
+  "concurrency": 20,
+  "timeoutSeconds": 10,
+  "targets": [
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "weight": 3,
+      "expectedStatuses": [200]
+    },
+    {
+      "method": "GET",
+      "path": "/api/ready",
+      "weight": 1,
+      "expectedStatuses": [200]
+    }
+  ],
+  "slo": {
+    "maxErrorRate": 0,
+    "p95Ms": 2000,
+    "p99Ms": 5000
+  }
+}

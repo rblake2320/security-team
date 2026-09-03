@@ -6,11 +6,10 @@ import io
 import json
 import re
 import zipfile
-from datetime import timezone
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .models import (

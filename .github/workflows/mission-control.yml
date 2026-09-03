@@ -47,7 +47,7 @@ jobs:
 
       - name: Backend contracts
         working-directory: mission-control
-        run: python -m pytest -q
+        run: python -m pytest -q --cov=aegis_platform --cov=aegis_connector --cov-report=term --cov-fail-under=80
 
       - name: Python dependency audit
         working-directory: mission-control
@@ -343,6 +343,68 @@ jobs:
           docker logs "$container_id"
           exit 1
 
+      - name: Prove fresh PostgreSQL multi-worker bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          admin_password="ci-only-not-a-secret-admin-password"
+          runtime_password="ci-only-not-a-secret-runtime-password-32"
+          database="aegis_multiworker_test"
+          db_id="$(docker run --detach --rm \
+            --publish 127.0.0.1:55433:5432 \
+            --env POSTGRES_DB="$database" \
+            --env POSTGRES_USER=aegis_admin \
+            --env POSTGRES_PASSWORD="$admin_password" \
+            postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685)"
+          app_id=""
+          cleanup() {
+            if [ -n "$app_id" ]; then docker rm --force "$app_id" >/dev/null 2>&1 || true; fi
+            docker rm --force "$db_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for _ in $(seq 1 45); do
+            if docker exec "$db_id" pg_isready --username aegis_admin --dbname "$database"; then break; fi
+            sleep 1
+          done
+          admin_url="postgresql+psycopg://aegis_admin:${admin_password}@127.0.0.1:55433/${database}"
+          app_id="$(docker run --detach --rm --network host --tmpfs /tmp:size=128m,noexec,nosuid,nodev \
+            --env AEGIS_ENV=production \
+            --env AEGIS_COMMIT="$GITHUB_SHA" \
+            --env AEGIS_HOST=127.0.0.1 \
+            --env AEGIS_PORT=18082 \
+            --env AEGIS_WORKERS=2 \
+            --env DATABASE_ADMIN_URL="$admin_url" \
+            --env AEGIS_DB_RUNTIME_PASSWORD="$runtime_password" \
+            --env AUTH_MODE=cloudflare \
+            --env CF_ACCESS_TEAM_DOMAIN=ci.cloudflareaccess.com \
+            --env CF_ACCESS_AUD=ci-audience \
+            --env PUBLIC_HOSTNAME=mission.ci.invalid \
+            --env TOKEN_PEPPER=ci-only-token-pepper-0123456789abcdef \
+            --env EVIDENCE_MASTER_KEY=MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY \
+            --env EVIDENCE_ROOT=/tmp/evidence \
+            --env EVIDENCE_SCANNER_MODE=clamav \
+            --env CLAMAV_HOST=127.0.0.1 \
+            --env CLAMAV_PORT=9 \
+            --env BOOTSTRAP_EMAIL=owner@ci.invalid \
+            --env BOOTSTRAP_ORGANIZATION='AEGIS CI' \
+            --env BOOTSTRAP_SLUG=aegis-ci \
+            aegis-mission-control:ci)"
+          for _ in $(seq 1 45); do
+            if curl --fail --silent http://127.0.0.1:18082/api/health >/dev/null; then break; fi
+            if [ "$(docker inspect --format '{{.State.Running}}' "$app_id")" != true ]; then
+              docker logs "$app_id"
+              exit 1
+            fi
+            sleep 1
+          done
+          sleep 2
+          logs="$(docker logs "$app_id" 2>&1)"
+          if grep -E -q 'Traceback|Child process .* died|OperationalError|IntegrityError' <<<"$logs"; then
+            printf '%s\n' "$logs"
+            exit 1
+          fi
+          test "$(grep -c 'Started server process' <<<"$logs")" -ge 2
+
       - name: Inspect runtime user
         run: test "$(docker image inspect aegis-mission-control:ci --format '{{.Config.User}}')" = "aegis"
 
@@ -364,6 +426,60 @@ jobs:
           done
           docker logs "$container_id"
           exit 1
+
+      - name: Reject an unwritable evidence store
+        shell: bash
+        run: |
+          set -euo pipefail
+          container_id="$(docker run --detach --rm --read-only --tmpfs /tmp:size=64m,noexec,nosuid,nodev \
+            --env DATABASE_URL=sqlite:////tmp/platform.db \
+            --env EVIDENCE_ROOT=/app \
+            aegis-mission-control:ci)"
+          trap 'docker rm --force "$container_id" >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 1 30); do
+            if docker exec "$container_id" python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health', timeout=2).read()"; then
+              break
+            fi
+            sleep 1
+          done
+          docker exec -i "$container_id" python - <<'PY'
+          import urllib.error
+          import urllib.request
+
+          try:
+              urllib.request.urlopen("http://127.0.0.1:8080/api/ready", timeout=2)
+          except urllib.error.HTTPError as exc:
+              assert exc.code == 503
+          else:
+              raise SystemExit("readiness accepted an unwritable evidence store")
+          PY
+
+      - name: Prove clean multi-worker startup and bounded concurrency
+        shell: bash
+        run: |
+          set -euo pipefail
+          container_id="$(docker run --detach --rm --publish 127.0.0.1:18081:8080 \
+            --env AEGIS_WORKERS=2 aegis-mission-control:ci)"
+          trap 'docker rm --force "$container_id" >/dev/null 2>&1 || true' EXIT
+          for _ in $(seq 1 30); do
+            if docker exec "$container_id" python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/ready', timeout=2).read()"; then
+              break
+            fi
+            sleep 1
+          done
+          sleep 2
+          logs="$(docker logs "$container_id" 2>&1)"
+          if grep -E -q 'Traceback|Child process .* died|OperationalError' <<<"$logs"; then
+            printf '%s\n' "$logs"
+            exit 1
+          fi
+          test "$(grep -c 'Started server process' <<<"$logs")" -ge 2
+          docker run --rm --network host \
+            --env AEGIS_COMMIT="$GITHUB_SHA" \
+            --volume "$PWD/mission-control/tools/run_capacity_probe.py:/tmp/run_capacity_probe.py:ro" \
+            --volume "$PWD/mission-control/capacity/ci-concurrency-smoke.json:/tmp/profile.json:ro" \
+            --entrypoint python aegis-mission-control:ci \
+            /tmp/run_capacity_probe.py /tmp/profile.json --base-url http://127.0.0.1:18081
 
       - name: Build isolated showcase image
         run: docker build --build-arg AEGIS_WEB_BUILD=showcase --tag aegis-mission-control-showcase:ci ./mission-control

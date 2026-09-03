@@ -6,6 +6,8 @@ import os
 
 import uvicorn
 
+from aegis_platform.initialize import initialize_from_env
+
 from aegis_platform.config import Settings
 
 
@@ -18,6 +20,8 @@ def main() -> int:
     settings = Settings.from_env()
     if settings.environment != "production" and args.host not in {"127.0.0.1", "localhost", "::1"}:
         raise SystemExit("Non-production environments must bind to loopback")
+    initialize_from_env()
+    os.environ["AEGIS_SKIP_INITIALIZATION"] = "1"
     uvicorn.run(
         "aegis_platform.api:create_app",
         factory=True,

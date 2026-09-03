@@ -1,0 +1,27 @@
+{
+  "schema": "aegis.capacity-tier-contracts/1.0",
+  "rule": "No tier is ready until its exact-artifact load, soak, degradation, and recovery receipts all pass in the target production topology.",
+  "tiers": [
+    {
+      "name": "controlled-beta-10",
+      "claimedUsers": 10,
+      "minimumSeededIdentities": 20,
+      "status": "UNPROVEN",
+      "requiredReceipts": ["mixed-api-load", "evidence-scan-load", "one-hour-soak", "dependency-failure-recovery"]
+    },
+    {
+      "name": "regional-saas-1000",
+      "claimedUsers": 1000,
+      "minimumSeededIdentities": 2000,
+      "status": "UNPROVEN",
+      "requiredReceipts": ["mixed-api-load", "evidence-scan-load", "eight-hour-soak", "replica-loss", "database-failover", "restore-under-load"]
+    },
+    {
+      "name": "enterprise-500000",
+      "claimedUsers": 500000,
+      "minimumSeededIdentities": 1000000,
+      "status": "UNPROVEN",
+      "requiredReceipts": ["multi-region-load", "tenant-noisy-neighbor", "twenty-four-hour-soak", "availability-zone-loss", "regional-failover", "point-in-time-restore", "independent-security-test"]
+    }
+  ]
+}

@@ -115,11 +115,15 @@ class EvidenceStore:
             content,
             organization_id.encode("utf-8"),
         )
-        with temporary.open("xb") as handle:
-            handle.write(self.MAGIC + nonce + encrypted)
-            handle.flush()
-            os.fsync(handle.fileno())
-        temporary.replace(destination)
+        try:
+            with temporary.open("xb") as handle:
+                handle.write(self.MAGIC + nonce + encrypted)
+                handle.flush()
+                os.fsync(handle.fileno())
+            temporary.replace(destination)
+        except Exception:
+            temporary.unlink(missing_ok=True)
+            raise
         return StoredObject(storage_key, digest, len(content), safe_name, content_type)
 
     def get(self, organization_id: str, storage_key: str) -> bytes:
@@ -151,3 +155,20 @@ class EvidenceStore:
             return False
         target.unlink()
         return True
+
+    def readiness_probe(self) -> None:
+        """Prove encrypted evidence can be durably written, read, and deleted."""
+        organization_id = "__aegis_readiness__"
+        content = b"aegis evidence readiness canary"
+        stored = self.put(
+            organization_id,
+            "readiness-canary.bin",
+            "application/octet-stream",
+            content,
+        )
+        try:
+            if self.get(organization_id, stored.storage_key) != content:
+                raise RuntimeError("evidence readiness decrypt round-trip failed")
+        finally:
+            if not self.delete(stored.storage_key):
+                raise RuntimeError("evidence readiness cleanup failed")

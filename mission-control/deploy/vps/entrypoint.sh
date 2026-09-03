@@ -10,6 +10,9 @@ if [ "${AEGIS_ENV:-development}" = "production" ]; then
   export DATABASE_URL
 fi
 
+python -m aegis_platform.initialize
+export AEGIS_SKIP_INITIALIZATION=1
+
 exec uvicorn aegis_platform.api:create_app \
   --factory \
   --host "${AEGIS_HOST:-0.0.0.0}" \

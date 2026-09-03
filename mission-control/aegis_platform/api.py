@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import time
 import uuid
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from datetime import timezone
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
@@ -23,9 +23,7 @@ from .audit import append_audit, verify_audit
 from .config import PLATFORM_ROOT, Settings
 from .db import Database
 from .models import (
-    Agent,
     AIAsset,
-    AIPolicy,
     Approval,
     AssessmentRun,
     Connector,
@@ -35,15 +33,11 @@ from .models import (
     Evidence,
     Finding,
     Incident,
-    Membership,
-    Organization,
     Program,
     PolicyViolation,
     RetentionPolicy,
     SecurityControl,
     Task,
-    TelemetryEvent,
-    User,
     utcnow,
 )
 from .policies import ACTION_CATALOG, ROLE_PERMISSIONS, require_permission
@@ -167,9 +161,10 @@ def create_app(
 ) -> FastAPI:
     settings = settings or Settings.from_env()
     database = Database(settings)
-    if create_schema and settings.environment != "production":
-        database.create_schema()
-    database.bootstrap()
+    if os.getenv("AEGIS_SKIP_INITIALIZATION") != "1":
+        if create_schema and settings.environment != "production":
+            database.create_schema()
+        database.bootstrap()
     verifier = AccessVerifier(settings)
     evidence_store = EvidenceStore(settings.evidence_root, settings.max_evidence_bytes, settings.evidence_master_key)
     scanner = evidence_scanner or build_evidence_scanner(
@@ -347,10 +342,16 @@ def create_app(
 
     @app.get("/api/ready")
     def ready(session: Session = Depends(get_session)) -> dict[str, Any]:
-        session.execute(text("SELECT 1"))
-        writable = settings.evidence_root.exists() and settings.evidence_root.is_dir()
-        if not writable:
-            raise HTTPException(status_code=503, detail="evidence store unavailable")
+        try:
+            database.readiness_probe(session)
+        except Exception:
+            LOG.exception("Database readiness write round-trip failed")
+            raise HTTPException(status_code=503, detail="database unavailable") from None
+        try:
+            evidence_store.readiness_probe()
+        except Exception:
+            LOG.exception("Evidence readiness encrypted round-trip failed")
+            raise HTTPException(status_code=503, detail="evidence store unavailable") from None
         if scanner.enabled and not scanner.ping():
             raise HTTPException(status_code=503, detail="evidence scanner unavailable")
         return {

@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import zipfile
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from aegis_platform.api import create_app
 from aegis_platform.audit import verify_audit
 from aegis_platform.config import Settings
 from aegis_platform.coverage import seed_security_controls
+from aegis_platform.db import Database
+from aegis_platform.initialize import initialize_from_env
 from aegis_platform.models import (
     AIPolicy,
     AuditEvent,
@@ -46,6 +49,52 @@ def app_bundle(tmp_path: Path):
     app = create_app(settings)
     with TestClient(app) as client:
         yield client, app, settings
+
+
+def test_ready_requires_real_database_and_encrypted_evidence_round_trips(app_bundle, monkeypatch):
+    client, app, _settings = app_bundle
+    assert client.get("/api/ready").status_code == 200
+
+    def unavailable() -> None:
+        raise OSError("synthetic read-only evidence store")
+
+    monkeypatch.setattr(app.state.evidence_store, "readiness_probe", unavailable)
+    response = client.get("/api/ready")
+    assert response.status_code == 503
+    assert response.json()["detail"] == "evidence store unavailable"
+
+
+def test_preworker_initializer_creates_a_complete_bootstrap(tmp_path: Path, monkeypatch):
+    settings = Settings(
+        environment="test",
+        database_url=f"sqlite:///{(tmp_path / 'initializer.db').as_posix()}",
+        evidence_root=tmp_path / "evidence",
+        auth_mode="development",
+        token_pepper="0123456789abcdef0123456789abcdef",
+        bootstrap_email="initializer@example.test",
+        bootstrap_organization="Initializer Workspace",
+        bootstrap_slug="initializer",
+    )
+    monkeypatch.setattr("aegis_platform.initialize.Settings.from_env", lambda: settings)
+    user_id, organization_id = initialize_from_env()
+
+    database = Database(settings)
+    with database.session() as session:
+        assert session.get(User, user_id) is not None
+        assert session.get(Organization, organization_id) is not None
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("database_pool_size", 0, "DB_POOL_SIZE"),
+        ("database_max_overflow", 101, "DB_MAX_OVERFLOW"),
+        ("database_pool_timeout_seconds", 0, "DB_POOL_TIMEOUT_SECONDS"),
+    ],
+)
+def test_database_pool_budgets_are_bounded(field: str, value: int, message: str):
+    with pytest.raises(RuntimeError, match=message):
+        replace(Settings(), **{field: value}).validate()
 
 
 def provision(client: TestClient, capabilities: list[str]) -> tuple[dict, str]:

@@ -75,6 +75,8 @@ Install the outbound-only customer-edge runtime from `Dockerfile.connector` or r
 
 The production core is model-independent. Do not configure any model-provider credential to satisfy readiness: the connector's repository, HTTP, evidence, and gate engines are deterministic and use no model SDK. Any future model-backed enrichment must be isolated behind a distinct optional capability and may not participate in identity, authorization, approval, lease, audit-chain, or automatic-failure decisions.
 
+Readiness is active rather than cosmetic: each probe performs a temporary database write round-trip and an encrypted evidence write/fsync/read/decrypt/delete round-trip before reporting ready. Multi-worker launches initialize schema/bootstrap once before Uvicorn forks workers, and PostgreSQL serializes cross-replica bootstrap.
+
 The production image must receive the exact 40-character `AEGIS_COMMIT`; startup refuses an unknown revision. Task creation records that revision and the action-catalog content digest. At lease time the server records the effective connector capability in a hash-bound grant, and completion is accepted only when the connector returns the matching digest plus the required action-specific evidence. Do not weaken these checks to accommodate an older connector—upgrade or revoke that connector instead.
 
 ## 4. Validate and start the platform
@@ -200,3 +202,17 @@ checkpoints, billing, contractual compliance mappings, independent penetration
 testing (including RLS policy review), and formal certifications remain explicit
 release-scope work for regulated or large-enterprise use. See
 `docs/THREAT_MODEL.md`.
+
+Capacity claims are governed by `capacity/tier-contracts.json` and
+`docs/adr/0001-enterprise-scale-platform.md`. A fast health response or low VPS
+CPU is not capacity evidence. Run the bounded exact-artifact smoke profile with:
+
+```powershell
+python tools/run_capacity_probe.py capacity/ci-concurrency-smoke.json `
+  --base-url http://127.0.0.1:8780 `
+  --output runtime/capacity-receipt.json
+```
+
+Remote load is blocked unless `--allow-remote` is explicit; mutation profiles
+also require `--allow-mutations`. Never point a load profile at a customer or
+production system without written scope, a rollback plan, and monitoring.

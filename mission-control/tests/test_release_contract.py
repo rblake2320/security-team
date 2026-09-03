@@ -58,6 +58,19 @@ class ProductionReleaseContractTests(unittest.TestCase):
         )
         self.assertRegex(workflow, r"clamav/clamav:[^\s]+@sha256:[0-9a-f]{64}")
 
+    def test_release_gates_coverage_readiness_concurrency_and_capacity(self) -> None:
+        workflow = (MISSION_ROOT.parent / ".github" / "workflows" / "mission-control.yml").read_text(
+            encoding="utf-8"
+        )
+        entrypoint = (MISSION_ROOT / "deploy" / "vps" / "entrypoint.sh").read_text(encoding="utf-8")
+        self.assertIn("--cov-fail-under=80", workflow)
+        self.assertIn("Reject an unwritable evidence store", workflow)
+        self.assertIn("AEGIS_WORKERS=2", workflow)
+        self.assertIn("Prove fresh PostgreSQL multi-worker bootstrap", workflow)
+        self.assertIn("run_capacity_probe.py", workflow)
+        self.assertIn("python -m aegis_platform.initialize", entrypoint)
+        self.assertIn("AEGIS_SKIP_INITIALIZATION=1", entrypoint)
+
     def test_production_uses_restricted_database_role_and_real_rls_gate(self) -> None:
         production_env = (MISSION_ROOT / "deploy" / "vps" / ".env.production.example").read_text(
             encoding="utf-8"

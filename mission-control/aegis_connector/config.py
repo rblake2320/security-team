@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import ipaddress
-import json
 import os
 import socket
 from dataclasses import dataclass

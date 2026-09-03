@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import io
 import json
 from pathlib import Path
 import sys
+from urllib.error import HTTPError, URLError
 
 import pytest
 
 from aegis_connector.analyzers import analyze_evidence, inspect_repository
+from aegis_connector.client import ConnectorAPI, ConnectorAPIError
 from aegis_connector.config import ConnectorConfig
 from aegis_connector.worker import ConnectorWorker
 
@@ -99,6 +102,147 @@ def test_connector_rejects_repository_outside_local_allowlist(tmp_path: Path):
     assert config.resolve_allowed_path(str(allowed)) == allowed.resolve()
     with pytest.raises(PermissionError, match="outside"):
         config.resolve_allowed_path(str(outside))
+
+
+def test_connector_environment_and_host_boundaries(tmp_path: Path, monkeypatch):
+    monkeypatch.setenv("AEGIS_PROGRAM_ROOT", str(tmp_path))
+    monkeypatch.setenv("AEGIS_ALLOWED_ROOTS", str(tmp_path))
+    monkeypatch.setenv("AEGIS_ALLOWED_HOSTS", "example.com")
+    monkeypatch.setenv("AEGIS_CONNECTOR_TOKEN", "aegc_abcdefghijklmnopqrstuvwxyz012345")
+    config = ConnectorConfig.from_env()
+
+    assert config.public_summary() == {
+        "apiOrigin": "http://127.0.0.1:8780",
+        "programRoot": tmp_path.name,
+        "allowedRootCount": 1,
+        "allowedHosts": ["example.com"],
+        "cloudflareAccess": False,
+    }
+
+    monkeypatch.setattr(
+        "aegis_connector.config.socket.getaddrinfo",
+        lambda *_args, **_kwargs: [(2, 1, 6, "", ("93.184.216.34", 0))],
+    )
+    assert config.assert_allowed_host("EXAMPLE.COM.") == "example.com"
+
+    monkeypatch.setattr(
+        "aegis_connector.config.socket.getaddrinfo",
+        lambda *_args, **_kwargs: [(2, 1, 6, "", ("127.0.0.1", 0))],
+    )
+    with pytest.raises(PermissionError, match="non-public"):
+        config.assert_allowed_host("example.com")
+
+
+def test_connector_reads_bounded_secret_files(tmp_path: Path, monkeypatch):
+    token_file = tmp_path / "connector-token"
+    token_file.write_text("aegc_abcdefghijklmnopqrstuvwxyz012345\n", encoding="utf-8")
+    monkeypatch.delenv("AEGIS_CONNECTOR_TOKEN", raising=False)
+    monkeypatch.setenv("AEGIS_CONNECTOR_TOKEN_FILE", str(token_file))
+    monkeypatch.setenv("AEGIS_PROGRAM_ROOT", str(tmp_path))
+    monkeypatch.setenv("AEGIS_ALLOWED_ROOTS", str(tmp_path))
+
+    config = ConnectorConfig.from_env()
+
+    assert config.token == "aegc_abcdefghijklmnopqrstuvwxyz012345"
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"AEGIS_API_URL": "http://example.com"}, "HTTPS"),
+        ({"AEGIS_CONNECTOR_TOKEN": "invalid"}, "missing or invalid"),
+        ({"AEGIS_POLL_SECONDS": "fast"}, "must be an integer"),
+        ({"AEGIS_POLL_SECONDS": "1"}, "must be between"),
+        ({"CF_ACCESS_CLIENT_ID": "client-only"}, "required together"),
+    ],
+)
+def test_connector_rejects_unsafe_environment(
+    tmp_path: Path,
+    monkeypatch,
+    overrides: dict[str, str],
+    message: str,
+):
+    baseline = {
+        "AEGIS_API_URL": "http://127.0.0.1:8780",
+        "AEGIS_CONNECTOR_TOKEN": "aegc_abcdefghijklmnopqrstuvwxyz012345",
+        "AEGIS_PROGRAM_ROOT": str(tmp_path),
+        "AEGIS_ALLOWED_ROOTS": str(tmp_path),
+        "CF_ACCESS_CLIENT_ID": "",
+        "CF_ACCESS_CLIENT_SECRET": "",
+    }
+    for name, value in {**baseline, **overrides}.items():
+        monkeypatch.setenv(name, value)
+
+    with pytest.raises(RuntimeError, match=message):
+        ConnectorConfig.from_env()
+
+
+def test_connector_rejects_missing_program_and_allowed_roots(tmp_path: Path):
+    missing = tmp_path / "missing"
+    valid = connector_config(tmp_path)
+
+    with pytest.raises(RuntimeError, match="PROGRAM_ROOT"):
+        ConnectorConfig(**{**valid.__dict__, "program_root": missing}).validate()
+    with pytest.raises(RuntimeError, match="at least one"):
+        ConnectorConfig(**{**valid.__dict__, "allowed_roots": ()}).validate()
+    with pytest.raises(RuntimeError, match="allowed root does not exist"):
+        ConnectorConfig(**{**valid.__dict__, "allowed_roots": (missing,)}).validate()
+    with pytest.raises(PermissionError, match="not in"):
+        valid.assert_allowed_host("missing.example")
+
+
+class FakeResponse:
+    def __init__(self, body: bytes):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self, limit: int) -> bytes:
+        return self.body[:limit]
+
+
+def test_connector_api_success_and_bounded_failures(tmp_path: Path, monkeypatch):
+    config = connector_config(tmp_path)
+    observed = []
+
+    def accepted(request, timeout):  # type: ignore[no-untyped-def]
+        observed.append((request, timeout))
+        return FakeResponse(b'{"accepted":true}')
+
+    monkeypatch.setattr("aegis_connector.client.urlopen", accepted)
+    api = ConnectorAPI(config)
+    assert api.heartbeat([]) == {"accepted": True}
+    assert observed[0][0].get_header("Authorization").startswith("Bearer aegc_")
+
+    bounded = ConnectorConfig(**{**config.__dict__, "max_evidence_bytes": 4})
+    monkeypatch.setattr("aegis_connector.client.urlopen", lambda *_args, **_kwargs: FakeResponse(b"12345"))
+    with pytest.raises(ConnectorAPIError, match="download limit") as too_large:
+        ConnectorAPI(bounded).download_evidence("task-1", "lease-1")
+    assert too_large.value.status == 413
+
+    forbidden = HTTPError(
+        config.api_url,
+        403,
+        "Forbidden",
+        {},
+        io.BytesIO(b'{"detail":"connector denied"}'),
+    )
+    monkeypatch.setattr("aegis_connector.client.urlopen", lambda *_args, **_kwargs: (_ for _ in ()).throw(forbidden))
+    with pytest.raises(ConnectorAPIError, match="connector denied") as denied:
+        api.lease()
+    assert denied.value.status == 403
+
+    monkeypatch.setattr(
+        "aegis_connector.client.urlopen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(URLError("offline")),
+    )
+    with pytest.raises(ConnectorAPIError, match="offline") as offline:
+        api.lease()
+    assert offline.value.status == 0
 
 
 def test_evidence_analysis_is_bounded_and_does_not_echo_secret():

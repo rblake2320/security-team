@@ -36,6 +36,9 @@ class Settings:
     max_event_batch: int = 100
     max_evidence_bytes: int = 10 * 1024 * 1024
     lease_seconds: int = 120
+    database_pool_size: int = 5
+    database_max_overflow: int = 5
+    database_pool_timeout_seconds: int = 10
     session_cookie_name: str = "aegis_session"
     evidence_scanner_mode: str = "disabled"
     clamav_host: str = "127.0.0.1"
@@ -66,6 +69,9 @@ class Settings:
             max_event_batch=_integer("MAX_EVENT_BATCH", 100),
             max_evidence_bytes=_integer("MAX_EVIDENCE_BYTES", 10 * 1024 * 1024),
             lease_seconds=_integer("TASK_LEASE_SECONDS", 120),
+            database_pool_size=_integer("DB_POOL_SIZE", 5),
+            database_max_overflow=_integer("DB_MAX_OVERFLOW", 5),
+            database_pool_timeout_seconds=_integer("DB_POOL_TIMEOUT_SECONDS", 10),
             session_cookie_name=os.getenv("SESSION_COOKIE_NAME", "aegis_session").strip(),
             evidence_scanner_mode=os.getenv("EVIDENCE_SCANNER_MODE", "disabled").strip().lower(),
             clamav_host=os.getenv("CLAMAV_HOST", "127.0.0.1").strip().lower(),
@@ -86,6 +92,12 @@ class Settings:
             raise RuntimeError("MAX_EVIDENCE_BYTES must be between 1 KiB and 100 MiB")
         if self.lease_seconds < 30 or self.lease_seconds > 3600:
             raise RuntimeError("TASK_LEASE_SECONDS must be between 30 and 3600")
+        if self.database_pool_size < 1 or self.database_pool_size > 50:
+            raise RuntimeError("DB_POOL_SIZE must be between 1 and 50")
+        if self.database_max_overflow < 0 or self.database_max_overflow > 100:
+            raise RuntimeError("DB_MAX_OVERFLOW must be between 0 and 100")
+        if self.database_pool_timeout_seconds < 1 or self.database_pool_timeout_seconds > 60:
+            raise RuntimeError("DB_POOL_TIMEOUT_SECONDS must be between 1 and 60")
         if self.evidence_scanner_mode not in {"disabled", "clamav"}:
             raise RuntimeError("EVIDENCE_SCANNER_MODE must be disabled or clamav")
         if not re.fullmatch(r"[a-z0-9.-]{1,253}", self.clamav_host):

@@ -11,14 +11,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 TARGETS = ["purple-team/src", "purple-team/tests", "red-team/src", "red-team/tests",
-           "blue-team/src", "blue-team/tests", "00-shared/tools", "tools", "exercise"]
+           "blue-team/src", "blue-team/tests", "00-shared/tools", "tools", "exercise",
+           "mission-control/aegis_platform", "mission-control/aegis_connector",
+           "mission-control/tests", "mission-control/tools", "mission-control/saas_server.py",
+           "mission-control/server.py"]
 # Targets with their own pyproject.toml (blue-team's carries real, specific settings -
 # line-length, target-version, a custom rule `select` - that must keep applying) vs.
 # targets with no local config anywhere in their ancestry up to the repo root, which
 # has none either.
 CONFIGURED_TARGETS = ["purple-team/src", "purple-team/tests", "red-team/src",
                        "red-team/tests", "blue-team/src", "blue-team/tests"]
-UNCONFIGURED_TARGETS = ["00-shared/tools", "tools", "exercise"]
+UNCONFIGURED_TARGETS = ["00-shared/tools", "tools", "exercise",
+                        "mission-control/aegis_platform", "mission-control/aegis_connector",
+                        "mission-control/tests", "mission-control/tools",
+                        "mission-control/saas_server.py", "mission-control/server.py"]
 
 def main() -> int:
     # Found live while investigating OPUS-CI-RED: ruff picked up and failed to parse

@@ -75,14 +75,38 @@ def load(p):
         return json.load(f)
 
 
+def tracked_files():
+    """Return the canonical Git-tracked source set or fail closed."""
+    proc = subprocess.run(
+        ["git", "-C", ROOT, "ls-files", "-z", "--"],
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        detail = proc.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"cannot bind claim gate to tracked source: {detail}")
+    return [path.decode("utf-8", errors="strict") for path in proc.stdout.split(b"\0") if path]
+
+
 def md_files():
-    out = []
-    for base, dirs, files in os.walk(ROOT):
-        dirs[:] = [d for d in dirs if d not in {".git", "__pycache__", ".ruff_cache", "node_modules", ".pytest_cache"}]
-        for fn in files:
-            if fn.endswith(".md"):
-                out.append(os.path.join(base, fn))
-    return sorted(out)
+    return sorted(
+        str(pathlib.Path(ROOT, *pathlib.PurePosixPath(relative).parts))
+        for relative in tracked_files()
+        if relative.lower().endswith(".md")
+    )
+
+
+def copy_tracked_tree(destination):
+    """Copy only reviewed source; ignored/untracked/vendor files cannot influence evidence."""
+    os.makedirs(destination, exist_ok=False)
+    for relative in tracked_files():
+        components = pathlib.PurePosixPath(relative).parts
+        source = os.path.join(ROOT, *components)
+        target = os.path.join(destination, *components)
+        if not os.path.isfile(source) and not os.path.islink(source):
+            raise RuntimeError(f"tracked source is missing: {relative}")
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        shutil.copy2(source, target, follow_symlinks=False)
 
 
 def rel(p):
@@ -250,11 +274,10 @@ def collect_node_ids():
     #
     # Execute against a throwaway copy. The tree under review is never written to.
     sandbox = tempfile.mkdtemp(prefix="claimcheck-")
-    ignore = shutil.ignore_patterns(".git", "__pycache__", ".ruff_cache", ".pytest_cache")
     work = os.path.join(sandbox, "repo")
     try:
-        shutil.copytree(ROOT, work, ignore=ignore, symlinks=True)
-    except OSError as exc:
+        copy_tracked_tree(work)
+    except (OSError, RuntimeError) as exc:
         shutil.rmtree(sandbox, ignore_errors=True)
         return set(), [f"sandbox copy failed: {exc}"], set()
 
